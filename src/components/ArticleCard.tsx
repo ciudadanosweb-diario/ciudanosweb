@@ -1,4 +1,5 @@
 import { Clock, Eye } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Article } from '../lib/supabase';
 
 type ArticleCardProps = {
@@ -7,6 +8,8 @@ type ArticleCardProps = {
 };
 
 export default function ArticleCard({ article, onClick }: ArticleCardProps) {
+  const navigate = useNavigate();
+
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('es-ES', {
       day: 'numeric',
@@ -15,9 +18,14 @@ export default function ArticleCard({ article, onClick }: ArticleCardProps) {
     });
   };
 
+  const handleClick = () => {
+    onClick?.();
+    navigate(`/article/${article.id}`);
+  };
+
   return (
     <article
-      onClick={onClick}
+      onClick={handleClick}
       className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow cursor-pointer group"
     >
       {article.image_url && (

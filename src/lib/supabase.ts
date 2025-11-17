@@ -19,7 +19,17 @@ if (!supabaseAnonKey) {
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'ciudanosweb-client',
+    },
+  },
+});
 
 export type Category = {
   id: string;
@@ -52,4 +62,19 @@ export type Profile = {
   full_name?: string;
   is_admin: boolean;
   created_at: string;
+};
+
+export type Ad = {
+  id: string;
+  title: string;
+  description?: string;
+  image_url: string;
+  link_url?: string;
+  position: number;
+  is_active: boolean;
+  start_date?: string;
+  end_date?: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
 };

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { TrendingUp, Calendar as CalendarIcon, Cloud } from 'lucide-react';
 import { supabase, Article } from '../lib/supabase';
 
 export default function Sidebar() {
+  const navigate = useNavigate();
   const [mostRead, setMostRead] = useState<Article[]>([]);
-  const [weather, setWeather] = useState({ temp: 24, condition: 'Soleado' });
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [weather] = useState({ temp: 24, condition: 'Soleado' });
+  const [currentDate] = useState(new Date());
 
   useEffect(() => {
     loadMostRead();
@@ -52,7 +54,11 @@ export default function Sidebar() {
         </div>
         <div className="space-y-4">
           {mostRead.map((article, index) => (
-            <div key={article.id} className="flex space-x-3 group cursor-pointer">
+            <div
+              key={article.id}
+              onClick={() => navigate(`/article/${article.id}`)}
+              className="flex space-x-3 group cursor-pointer"
+            >
               <span className="text-3xl font-bold text-gray-300 group-hover:text-teal-600 transition-colors">
                 {index + 1}
               </span>
@@ -82,7 +88,7 @@ export default function Sidebar() {
         <div className="text-center">
           <div className="text-6xl font-bold mb-2">{weather.temp}°</div>
           <p className="text-lg">{weather.condition}</p>
-          <p className="text-sm text-teal-100 mt-2">Ciudad Autónoma de Buenos Aires</p>
+          <p className="text-sm text-teal-100 mt-2">Santiago del Estero</p>
         </div>
       </div>
 
@@ -92,8 +98,8 @@ export default function Sidebar() {
           <h3 className="text-xl font-bold text-gray-900 capitalize">{monthName}</h3>
         </div>
         <div className="grid grid-cols-7 gap-1">
-          {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day) => (
-            <div key={day} className="text-center text-xs font-bold text-gray-600 p-2">
+          {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, index) => (
+            <div key={`day-${index}`} className="text-center text-xs font-bold text-gray-600 p-2">
               {day}
             </div>
           ))}

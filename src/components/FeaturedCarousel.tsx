@@ -38,7 +38,7 @@ export default function FeaturedCarousel() {
   const currentArticle = articles[currentIndex];
 
   return (
-    <div className="relative bg-gray-900 h-[500px] overflow-hidden group">
+    <div className="relative bg-gray-900 h-[280px] overflow-hidden group">
       {currentArticle.image_url && (
         <img
           src={currentArticle.image_url}
@@ -50,24 +50,24 @@ export default function FeaturedCarousel() {
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
 
       <div className="absolute inset-0 flex items-end">
-        <div className="container mx-auto px-4 pb-12">
-          <div className="max-w-3xl">
+        <div className="container mx-auto px-4 pb-6">
+          <div className="max-w-2xl">
             {currentArticle.category && (
               <span
-                className="inline-block px-3 py-1 rounded-full text-white text-sm font-semibold mb-3"
+                className="inline-block px-2 py-0.5 rounded-full text-white text-xs font-semibold mb-2"
                 style={{ backgroundColor: currentArticle.category.color }}
               >
                 {currentArticle.category.name}
               </span>
             )}
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-3 leading-tight">
+            <h2 className="text-2xl md:text-3xl font-bold text-white mb-2 leading-tight line-clamp-2">
               {currentArticle.title}
             </h2>
             {currentArticle.subtitle && (
-              <p className="text-xl text-gray-200 mb-4">{currentArticle.subtitle}</p>
+              <p className="text-sm text-gray-200 mb-2 line-clamp-1">{currentArticle.subtitle}</p>
             )}
             {currentArticle.excerpt && (
-              <p className="text-gray-300 text-lg line-clamp-2">{currentArticle.excerpt}</p>
+              <p className="text-gray-300 text-xs line-clamp-1">{currentArticle.excerpt}</p>
             )}
           </div>
         </div>

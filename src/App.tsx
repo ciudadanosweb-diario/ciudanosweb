@@ -8,14 +8,15 @@ import FeaturedCarousel from './components/FeaturedCarousel';
 import ArticleCard from './components/ArticleCard';
 import Sidebar from './components/Sidebar';
 import AdminPanel from './components/AdminPanel';
-import LoginForm from './components/LoginForm';
+import LoginAdmin from './components/LoginAdmin';
 import ArticleDetail from './pages/ArticleDetail';
 
 function App() {
-  const { user, loading } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [articles, setArticles] = useState<Article[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
 
   useEffect(() => {
     loadArticles();
@@ -36,24 +37,22 @@ function App() {
     if (data) setArticles(data);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <LoginForm />;
+  // Mostrar login de admin si no está autenticado y quiere acceder a admin
+  if (showAdminLogin && !user) {
+    return <LoginAdmin onCancel={() => setShowAdminLogin(false)} />;
   }
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
-      <Header onAdminClick={() => setShowAdminPanel(true)} />
+      <Header 
+        onAdminClick={() => {
+          if (user && isAdmin) {
+            setShowAdminPanel(true);
+          } else {
+            setShowAdminLogin(true);
+          }
+        }} 
+      />
       <CategoryNav selectedCategory={selectedCategory} onSelectCategory={setSelectedCategory} />
       
       <div className="flex-1 flex">
@@ -102,7 +101,7 @@ function App() {
         </div>
       </div>
 
-      {showAdminPanel && <AdminPanel onClose={() => setShowAdminPanel(false)} />}
+      {showAdminPanel && user && isAdmin && <AdminPanel onClose={() => setShowAdminPanel(false)} />}
 
       <footer className="bg-gray-900 text-white py-8">
         <div className="container mx-auto px-4 text-center">

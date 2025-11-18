@@ -42,7 +42,7 @@ export default function CategoryNav({ selectedCategory, onSelectCategory }: Cate
               className={`px-4 py-2 rounded-lg whitespace-nowrap font-medium transition-colors ${
                 selectedCategory === category.id
                   ? 'text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : 'bg-gray-100 text-red-600 hover:bg-gray-200'
               }`}
               style={{
                 backgroundColor: selectedCategory === category.id ? category.color : undefined,

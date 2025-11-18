@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TrendingUp, Calendar as CalendarIcon, Cloud } from 'lucide-react';
-import { supabase, Article } from '../lib/supabase';
+import { supabase, Article, Ad } from '../lib/supabase';
 
 export default function Sidebar() {
   const navigate = useNavigate();
   const [mostRead, setMostRead] = useState<Article[]>([]);
+  const [ads, setAds] = useState<Ad[]>([]);
   const [weather] = useState({ temp: 24, condition: 'Soleado' });
   const [currentDate] = useState(new Date());
 
   useEffect(() => {
     loadMostRead();
+    loadAds();
   }, []);
 
   const loadMostRead = async () => {
@@ -21,6 +23,15 @@ export default function Sidebar() {
       .order('view_count', { ascending: false })
       .limit(5);
     if (data) setMostRead(data);
+  };
+
+  const loadAds = async () => {
+    const { data } = await supabase
+      .from('ads')
+      .select('*')
+      .eq('is_active', true)
+      .order('position', { ascending: true });
+    if (data) setAds(data);
   };
 
   const daysInMonth = new Date(
@@ -39,13 +50,36 @@ export default function Sidebar() {
 
   return (
     <aside className="space-y-6">
-      <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-6 rounded-lg shadow-lg">
-        <h3 className="text-xl font-bold mb-4">Publicidad</h3>
-        <div className="bg-white/20 backdrop-blur-sm rounded-lg p-8 text-center">
-          <p className="text-2xl font-bold">Tu Anuncio Aquí</p>
-          <p className="text-sm mt-2">Espacio publicitario disponible</p>
+      {ads.length > 0 ? (
+        <div className="space-y-4">
+          {ads.map((ad) => (
+            <div key={ad.id}>
+              {ad.image_url && (
+                <a
+                  href={ad.link_url || '#'}
+                  target={ad.link_url ? '_blank' : '_self'}
+                  rel="noopener noreferrer"
+                  className="block w-full bg-gray-100 overflow-hidden hover:opacity-80 transition-opacity cursor-pointer"
+                >
+                  <img
+                    src={ad.image_url}
+                    alt={ad.title || 'Publicidad'}
+                    className="w-full h-auto object-cover"
+                  />
+                </a>
+              )}
+            </div>
+          ))}
         </div>
-      </div>
+      ) : (
+        <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-6 rounded-lg shadow-lg">
+          <h3 className="text-xl font-bold mb-4">Publicidad</h3>
+          <div className="bg-white/20 backdrop-blur-sm rounded-lg p-8 text-center">
+            <p className="text-2xl font-bold">Tu Anuncio Aquí</p>
+            <p className="text-sm mt-2">Espacio publicitario disponible</p>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow-lg p-6">
         <div className="flex items-center space-x-2 mb-4">

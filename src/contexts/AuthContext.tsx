@@ -17,15 +17,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    // Solo cargar si hay una sesión activa
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user) {
         loadProfile(session.user.id);
-      } else {
-        setLoading(false);
       }
     });
 
@@ -36,7 +35,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await loadProfile(session.user.id);
         } else {
           setProfile(null);
-          setLoading(false);
         }
       })();
     });
@@ -56,17 +54,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(data);
     } catch (error) {
       console.error('Error loading profile:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
+      setLoading(true);
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       return { error };
     } catch (error) {
       return { error: error as Error };
+    } finally {
+      setLoading(false);
     }
   };
 

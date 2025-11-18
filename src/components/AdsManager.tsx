@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { X, Plus, Edit, Trash2, Save, ArrowUp, ArrowDown, Eye, EyeOff } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Plus, Edit, Trash2, Save, Upload, ArrowUp, ArrowDown, Eye, EyeOff } from 'lucide-react';
+import imageCompression from 'browser-image-compression';
 import { supabase, Ad } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -23,6 +24,7 @@ const getImageUrl = (url: string): string => {
 
 export default function AdsManager() {
   const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [ads, setAds] = useState<Ad[]>([]);
   const [editingAd, setEditingAd] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -35,10 +37,94 @@ export default function AdsManager() {
     start_date: '',
     end_date: '',
   });
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     loadAds();
   }, []);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validar tipo de archivo
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor selecciona una imagen válida');
+      return;
+    }
+
+    // Validar tamaño inicial (máximo 10MB antes de comprimir)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('La imagen no debe superar 10MB');
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(0);
+
+    try {
+      // Comprimir imagen al 80% (20% de reducción de calidad)
+      const options = {
+        maxSizeMB: 1, // Máximo 1MB después de comprimir
+        maxWidthOrHeight: 1920, // Máximo ancho o alto
+        useWebWorker: true,
+        quality: 0.8, // 80% de calidad (reducción del 20%)
+        fileType: 'image/jpeg',
+      };
+
+      setUploadProgress(25);
+
+      const compressedFile = await imageCompression(file, options);
+
+      console.log('Imagen original:', file.size, 'bytes');
+      console.log('Imagen comprimida:', compressedFile.size, 'bytes');
+      console.log('Reducción:', Math.round((1 - compressedFile.size / file.size) * 100), '%');
+
+      setUploadProgress(50);
+
+      // Crear nombre único para el archivo
+      const timestamp = new Date().getTime();
+      const fileName = `${user.id}/${timestamp}-${file.name}`;
+
+      // Subir archivo comprimido a Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('ads')
+        .upload(fileName, compressedFile, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: 'image/jpeg',
+        });
+
+      if (uploadError) throw uploadError;
+
+      setUploadProgress(75);
+
+      // Obtener URL pública del archivo
+      const { data: { publicUrl } } = supabase.storage
+        .from('ads')
+        .getPublicUrl(fileName);
+
+      // Actualizar formulario con la URL de la imagen
+      setFormData({ ...formData, image_url: publicUrl });
+      setUploadProgress(100);
+
+      setTimeout(() => {
+        setUploadProgress(0);
+        setUploading(false);
+      }, 1000);
+    } catch (error) {
+      console.error('Error al subir imagen:', error);
+      alert('Error al subir la imagen. Intenta de nuevo.');
+      setUploading(false);
+      setUploadProgress(0);
+    }
+
+    // Limpiar input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const loadAds = async () => {
     try {
@@ -61,8 +147,8 @@ export default function AdsManager() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.title.trim() || !formData.image_url) {
-      alert('Por favor completa todos los campos requeridos');
+    if (!formData.image_url) {
+      alert('Por favor completa el campo de imagen requerido');
       return;
     }
 
@@ -192,13 +278,12 @@ export default function AdsManager() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Título *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
             <input
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-              required
             />
           </div>
 
@@ -214,9 +299,43 @@ export default function AdsManager() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">URL de Imagen *</label>
-            <div className="bg-blue-50 p-3 rounded-lg mb-3 border border-blue-200">
+            <div className="flex gap-2 mb-3">
+              <input
+                type="url"
+                value={formData.image_url}
+                onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                placeholder="https://ejemplo.com/imagen.jpg"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors"
+              >
+                <Upload className="w-4 h-4" />
+                <span>{uploading ? 'Subiendo...' : 'Subir'}</span>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
+            </div>
+            {uploadProgress > 0 && uploadProgress < 100 && (
+              <div className="mb-3 w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-500 h-2 rounded-full transition-all"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            )}
+            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
               <p className="text-sm text-blue-900">
-                <strong>💡 Nota:</strong> Usa URLs externas de servicios como:
+                <strong>💡 Nota:</strong> Puedes subir una imagen o usar una URL externa de servicios como:
               </p>
               <ul className="text-sm text-blue-900 list-disc list-inside mt-1">
                 <li><a href="https://imgur.com" target="_blank" rel="noopener noreferrer" className="underline">Imgur.com</a></li>
@@ -224,14 +343,6 @@ export default function AdsManager() {
                 <li><a href="https://cloudinary.com" target="_blank" rel="noopener noreferrer" className="underline">Cloudinary.com</a></li>
               </ul>
             </div>
-            <input
-              type="url"
-              value={formData.image_url}
-              onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-              placeholder="https://ejemplo.com/imagen.jpg"
-              required
-            />
           </div>
 
           <div>

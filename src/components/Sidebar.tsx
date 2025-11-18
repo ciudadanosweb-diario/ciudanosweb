@@ -53,20 +53,49 @@ export default function Sidebar() {
       {ads.length > 0 ? (
         <div className="space-y-4">
           {ads.map((ad) => (
-            <div key={ad.id}>
-              {ad.image_url && (
+            <div key={ad.id} className="bg-white rounded-lg shadow-lg overflow-hidden">
+              {ad.image_url ? (
                 <a
                   href={ad.link_url || '#'}
                   target={ad.link_url ? '_blank' : '_self'}
                   rel="noopener noreferrer"
-                  className="block w-full bg-gray-100 overflow-hidden hover:opacity-80 transition-opacity cursor-pointer"
+                  className="block w-full bg-gray-100 overflow-hidden hover:opacity-80 transition-opacity cursor-pointer group"
                 >
-                  <img
-                    src={ad.image_url}
-                    alt={ad.title || 'Publicidad'}
-                    className="w-full h-auto object-cover"
-                  />
+                  <div className="relative w-full h-48 bg-gray-200 flex items-center justify-center">
+                    <img
+                      src={ad.image_url}
+                      alt={ad.title || 'Publicidad'}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      onError={(e) => {
+                        console.error('Error cargando publicidad:', ad.image_url);
+                        e.currentTarget.style.display = 'none';
+                        const container = e.currentTarget.parentElement;
+                        if (container) {
+                          const errorDiv = document.createElement('div');
+                          errorDiv.className = 'w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-300 to-gray-400 p-4 text-center';
+                          errorDiv.innerHTML = `
+                            <p class="text-gray-600 text-sm font-semibold">${ad.title || 'Publicidad'}</p>
+                            <p class="text-gray-500 text-xs mt-2">Imagen no disponible</p>
+                            <p class="text-gray-600 text-xs mt-1">Verificar configuración del storage</p>
+                          `;
+                          container.appendChild(errorDiv);
+                        }
+                      }}
+                      onLoad={() => {
+                        console.log('Publicidad cargada:', ad.image_url);
+                      }}
+                    />
+                  </div>
                 </a>
+              ) : (
+                <div className="w-full h-48 bg-gradient-to-br from-orange-400 to-orange-500 flex items-center justify-center text-white text-center p-4">
+                  <p className="font-semibold">{ad.title || 'Publicidad'}</p>
+                </div>
+              )}
+              {ad.title && (
+                <div className="p-3 bg-gradient-to-r from-orange-50 to-orange-100">
+                  <p className="text-xs font-semibold text-gray-700 line-clamp-2">{ad.title}</p>
+                </div>
               )}
             </div>
           ))}

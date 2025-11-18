@@ -105,8 +105,13 @@ export default function AdsManager() {
         .from('ads')
         .getPublicUrl(fileName);
 
+      // Construir URL segura con transformaciones si es necesario
+      const imageUrl = publicUrl.includes('?') 
+        ? publicUrl 
+        : `${publicUrl}?download=false`;
+
       // Actualizar formulario con la URL de la imagen
-      setFormData({ ...formData, image_url: publicUrl });
+      setFormData({ ...formData, image_url: imageUrl });
       setUploadProgress(100);
 
       setTimeout(() => {

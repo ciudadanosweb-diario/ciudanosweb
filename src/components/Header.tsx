@@ -1,11 +1,7 @@
-import { Newspaper, User, LogOut } from 'lucide-react';
+import { Newspaper, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-type HeaderProps = {
-  onAdminClick?: () => void;
-};
-
-export default function Header({ onAdminClick }: HeaderProps) {
+export default function Header() {
   const { user, signOut } = useAuth();
   const currentDate = new Date().toLocaleDateString('es-ES', {
     weekday: 'long',
@@ -34,14 +30,6 @@ export default function Header({ onAdminClick }: HeaderProps) {
           </div>
 
           <div className="flex items-center space-x-2 md:space-x-4 flex-shrink-0">
-            <button
-              onClick={onAdminClick}
-              className="flex items-center space-x-1 md:space-x-2 bg-orange-500 hover:bg-orange-600 px-2 md:px-4 py-1 md:py-2 rounded-lg transition-colors text-white text-xs md:text-sm whitespace-nowrap"
-            >
-              <User className="w-3 h-3 md:w-4 md:h-4" />
-              <span className="hidden sm:inline">Panel Admin</span>
-            </button>
-            
             {user && (
               <button
                 onClick={signOut}

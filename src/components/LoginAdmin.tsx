@@ -3,10 +3,11 @@ import { LogIn, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 type LoginAdminProps = {
-  onCancel: () => void;
+  onClose: () => void;
+  onLoginSuccess?: () => void;
 };
 
-export default function LoginAdmin({ onCancel }: LoginAdminProps) {
+export default function LoginAdmin({ onClose, onLoginSuccess }: LoginAdminProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -23,8 +24,10 @@ export default function LoginAdmin({ onCancel }: LoginAdminProps) {
       if (error) {
         throw error;
       }
-      // El error será manejado por el AuthContext, el componente se cerrará automáticamente
-      // cuando el usuario se autentique
+      // Login exitoso
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error de autenticación');
     } finally {
@@ -36,7 +39,7 @@ export default function LoginAdmin({ onCancel }: LoginAdminProps) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md relative">
         <button
-          onClick={onCancel}
+          onClick={onClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
         >
           <X className="w-6 h-6" />
@@ -94,7 +97,7 @@ export default function LoginAdmin({ onCancel }: LoginAdminProps) {
 
           <button
             type="button"
-            onClick={onCancel}
+            onClick={onClose}
             className="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-3 rounded-lg transition-colors"
           >
             Volver

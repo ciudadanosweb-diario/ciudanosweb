@@ -53,7 +53,7 @@ function App() {
       <Header />
       <CategoryNav selectedCategory={selectedCategory} onSelectCategory={setSelectedCategory} />
       
-      <div className="flex-1 flex">
+      <div className="flex-1 flex flex-col lg:flex-row">
         <div className="flex-1">
           <Routes>
             <Route
@@ -94,7 +94,7 @@ function App() {
           </Routes>
         </div>
 
-        <div className="hidden lg:block w-80 px-4 py-8">
+        <div className="w-full lg:w-80 px-4 py-8">
           <Sidebar />
         </div>
       </div>

@@ -51,7 +51,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
       <Header />
-      {user && <CategoryNav selectedCategory={selectedCategory} onSelectCategory={setSelectedCategory} />}
+      <CategoryNav selectedCategory={selectedCategory} onSelectCategory={setSelectedCategory} />
       
       <div className="flex-1 flex">
         <div className="flex-1">

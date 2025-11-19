@@ -1,4 +1,4 @@
-import { Newspaper, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Header() {
@@ -11,21 +11,29 @@ export default function Header() {
   });
 
   return (
-    <header className="bg-gradient-to-b from-green-100 to-white text-gray-800 shadow-lg">
+    <header className="bg-[linear-gradient(to_bottom,_#4ade80_0%,_#ffffff_30%,_#ffffff_80%,_#16a34a_100%)] text-gray-800 shadow-lg relative">
       <div className="container mx-auto px-4 py-3 md:py-6">
         <div className="flex items-center justify-between gap-2 md:gap-0">
           <div className="flex items-center space-x-2 md:space-x-6 relative">
-            <div className="absolute -left-8 md:-left-14 opacity-50 hidden md:block">
+            <div className="block opacity-50">
               <img 
                 src="https://res.cloudinary.com/dgxb5aeqx/image/upload/v1763435103/catedral-Photoroom_ha5rnt.png"
                 alt="Catedral"
-                className="h-32 w-32 object-cover"
+                className="h-16 w-16 md:h-32 md:w-32 object-cover"
               />
             </div>
-            <Newspaper className="w-8 h-8 md:w-10 md:h-10 text-green-600 relative z-10 flex-shrink-0" />
-            <div className="relative z-10 md:pl-4">
+            
+            <div className="relative z-10">
               <h1 className="text-3xl md:text-6xl lg:text-8xl font-bold tracking-tight font-typewriter text-green-800 whitespace-nowrap">Ciudadanos</h1>
               <p className="text-green-600 text-xs md:text-sm capitalize hidden md:block">{currentDate}</p>
+            </div>
+            
+            <div className="block opacity-50">
+              <img 
+                src="https://res.cloudinary.com/dgxb5aeqx/image/upload/v1763435103/catedral-Photoroom_ha5rnt.png"
+                alt="Catedral"
+                className="h-16 w-16 md:h-32 md:w-32 object-cover"
+              />
             </div>
           </div>
 

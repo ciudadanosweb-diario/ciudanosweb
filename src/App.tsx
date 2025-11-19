@@ -51,6 +51,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
       <Header />
+      <div className="h-1 bg-orange-500"></div>
       <CategoryNav selectedCategory={selectedCategory} onSelectCategory={setSelectedCategory} />
       
       <div className="flex-1 flex flex-col lg:flex-row">

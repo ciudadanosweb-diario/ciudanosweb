@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { supabase, Article } from './lib/supabase';
 import Header from './components/Header';
@@ -13,9 +13,9 @@ import ArticleDetail from './pages/ArticleDetail';
 
 function App() {
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
   const [articles, setArticles] = useState<Article[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [showLoginAdmin, setShowLoginAdmin] = useState(false);
 
   useEffect(() => {
@@ -92,6 +92,7 @@ function App() {
               }
             />
             <Route path="/article/:id" element={<ArticleDetail />} />
+            <Route path="/admin" element={user ? <AdminPanel /> : <div className="container mx-auto px-4 py-12 text-center"><p className="text-xl text-gray-600">Debes iniciar sesión para acceder al panel de administración</p></div>} />
           </Routes>
         </div>
 
@@ -100,8 +101,7 @@ function App() {
         </div>
       </div>
 
-      {showAdminPanel && user && <AdminPanel onClose={() => setShowAdminPanel(false)} />}
-      {showLoginAdmin && <LoginAdmin onClose={() => setShowLoginAdmin(false)} onLoginSuccess={() => { setShowLoginAdmin(false); setShowAdminPanel(true); }} />}
+      {showLoginAdmin && <LoginAdmin onClose={() => setShowLoginAdmin(false)} onLoginSuccess={() => { setShowLoginAdmin(false); navigate('/admin'); }} />}
 
       <footer className="bg-gray-900 text-white py-8">
         <div className="container mx-auto px-4">
@@ -111,7 +111,7 @@ function App() {
               <p className="text-gray-400 text-sm">Tu fuente confiable de noticias</p>
             </div>
             <button
-              onClick={() => setShowLoginAdmin(true)}
+              onClick={() => user ? navigate('/admin') : setShowLoginAdmin(true)}
               className="flex items-center space-x-2 bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-lg transition-colors text-white text-sm whitespace-nowrap"
             >
               <span>Panel Admin</span>

@@ -85,7 +85,7 @@ export default function AdsManager() {
 
       // Crear nombre único para el archivo
       const timestamp = new Date().getTime();
-      const fileName = `${user.id}/${timestamp}-${file.name}`;
+      const fileName = `imagenes/${timestamp}-${file.name}`;
 
       // Subir archivo comprimido a Supabase Storage
       const { error: uploadError } = await supabase.storage

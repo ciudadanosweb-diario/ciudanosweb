@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Eye, Clock, User } from 'lucide-react';
 import { supabase, Article } from '../lib/supabase';
+import SocialShare from '../components/SocialShare';
 
 export default function ArticleDetail() {
   const { id } = useParams<{ id: string }>();
@@ -13,6 +14,40 @@ export default function ArticleDetail() {
   useEffect(() => {
     loadArticle();
   }, [id]);
+
+  useEffect(() => {
+    if (article) {
+      // Actualizar meta tags para compartir en redes sociales
+      document.title = `${article.title} - Ciudadanos Digital`;
+      
+      // Open Graph meta tags
+      const metaTags = [
+        { property: 'og:title', content: article.title },
+        { property: 'og:description', content: article.excerpt || article.subtitle || article.title },
+        { property: 'og:image', content: article.image_url || '' },
+        { property: 'og:url', content: window.location.href },
+        { property: 'og:type', content: 'article' },
+        { name: 'twitter:card', content: 'summary_large_image' },
+        { name: 'twitter:title', content: article.title },
+        { name: 'twitter:description', content: article.excerpt || article.subtitle || article.title },
+        { name: 'twitter:image', content: article.image_url || '' },
+      ];
+
+      metaTags.forEach(({ property, name, content }) => {
+        const selector = property ? `meta[property="${property}"]` : `meta[name="${name}"]`;
+        let meta = document.querySelector(selector);
+        
+        if (!meta) {
+          meta = document.createElement('meta');
+          if (property) meta.setAttribute('property', property);
+          if (name) meta.setAttribute('name', name);
+          document.head.appendChild(meta);
+        }
+        
+        meta.setAttribute('content', content);
+      });
+    }
+  }, [article]);
 
   const loadArticle = async () => {
     if (!id) {
@@ -148,6 +183,14 @@ export default function ArticleDetail() {
                   {article.category.name}
                 </span>
               )}
+              <div className="ml-auto">
+                <SocialShare
+                  url={window.location.href}
+                  title={article.title}
+                  description={article.excerpt || article.subtitle}
+                  imageUrl={article.image_url}
+                />
+              </div>
             </div>
 
             {article.excerpt && (
@@ -156,13 +199,11 @@ export default function ArticleDetail() {
               </div>
             )}
 
-            <div className="prose prose-lg max-w-none text-gray-800 leading-relaxed">
-              {article.content.split('\n').map((paragraph, index) => (
-                <p key={index} className="mb-6 whitespace-pre-wrap">
-                  {paragraph}
-                </p>
-              ))}
-            </div>
+            {/* Contenido del artículo con HTML renderizado */}
+            <div 
+              className="prose prose-lg max-w-none text-gray-800 leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: article.content }}
+            />
 
             <div className="mt-12 pt-8 border-t-2 border-gray-200">
               <div className="bg-gray-50 rounded-lg p-6">

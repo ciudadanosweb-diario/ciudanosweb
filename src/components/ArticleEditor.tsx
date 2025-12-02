@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, Upload, Save, Loader } from 'lucide-react';
+import { X, Upload, Save, Loader, Image as ImageIcon } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { supabase, Article, Category } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import ImageGallery from './ImageGallery';
 
 type ArticleEditorProps = {
   onClose: () => void;
@@ -54,6 +55,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
   const [saving, setSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [imagePreview, setImagePreview] = useState<string>('');
+  const [showGallery, setShowGallery] = useState(false);
   const [formData, setFormData] = useState<ArticleForm>({
     title: '',
     subtitle: '',
@@ -128,7 +130,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
 
       // Crear nombre único para el archivo
       const timestamp = Date.now();
-      const fileName = `${user.id}/${timestamp}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const fileName = `imagenes/${timestamp}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
       console.log('📁 Subiendo a Supabase:', fileName);
 
@@ -353,45 +355,58 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
               )}
 
               {/* Botón de subida */}
-              <div>
-                <input
-                  type="file"
-                  id="image-upload"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                  disabled={uploading}
-                />
-                <label
-                  htmlFor="image-upload"
-                  className={`flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
-                    uploading
-                      ? 'border-gray-300 bg-gray-50 cursor-not-allowed'
-                      : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50'
-                  }`}
-                >
-                  {uploading ? (
-                    <>
-                      <Loader size={20} className="animate-spin text-blue-500" />
-                      <span className="text-gray-600">Subiendo... {uploadProgress}%</span>
-                    </>
-                  ) : (
-                    <>
-                      <Upload size={20} className="text-gray-500" />
-                      <span className="text-gray-600">
-                        {imagePreview ? 'Cambiar imagen' : 'Subir imagen'}
-                      </span>
-                    </>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <input
+                    type="file"
+                    id="image-upload"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                    disabled={uploading}
+                  />
+                  <label
+                    htmlFor="image-upload"
+                    className={`flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed rounded-lg cursor-pointer transition-colors w-full ${
+                      uploading
+                        ? 'border-gray-300 bg-gray-50 cursor-not-allowed'
+                        : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50'
+                    }`}
+                  >
+                    {uploading ? (
+                      <>
+                        <Loader size={20} className="animate-spin text-blue-500" />
+                        <span className="text-gray-600">Subiendo... {uploadProgress}%</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={20} className="text-gray-500" />
+                        <span className="text-gray-600">
+                          {imagePreview ? 'Cambiar imagen' : 'Subir imagen'}
+                        </span>
+                      </>
+                    )}
+                  </label>
+                  {uploading && (
+                    <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
                   )}
-                </label>
-                {uploading && (
-                  <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${uploadProgress}%` }}
-                    />
-                  </div>
-                )}
+                </div>
+                
+                {/* Botón para abrir galería */}
+                <button
+                  type="button"
+                  onClick={() => setShowGallery(true)}
+                  className="px-4 py-3 border-2 border-purple-300 hover:border-purple-500 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors flex items-center gap-2"
+                  disabled={uploading}
+                >
+                  <ImageIcon size={20} className="text-purple-600" />
+                  <span className="text-purple-700 font-medium">Galería</span>
+                </button>
               </div>
             </div>
           </div>
@@ -488,6 +503,23 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
           </div>
         </form>
       </div>
+
+      {/* Modal de Galería de Imágenes */}
+      {showGallery && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden">
+            <ImageGallery
+              selectionMode={true}
+              onSelectImage={(url) => {
+                setFormData(prevData => ({ ...prevData, image_url: url }));
+                setImagePreview(url);
+                setShowGallery(false);
+              }}
+              onClose={() => setShowGallery(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

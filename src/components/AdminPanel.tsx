@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Plus, Edit, Trash2, Save, Upload, Settings, ArrowLeft } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, Upload, Settings, ArrowLeft } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
@@ -7,10 +7,6 @@ import { supabase, Article, Category } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import AdsManager from './AdsManager';
 import ArticleEditor from './ArticleEditor';
-
-type AdminPanelProps = {
-  onClose: () => void;
-};
 
 type ArticleForm = {
   title: string;
@@ -132,7 +128,7 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
 
       // Crear nombre único para el archivo
       const timestamp = new Date().getTime();
-      const fileName = `${user.id}/${timestamp}-${file.name}`;
+      const fileName = `imagenes/${timestamp}-${file.name}`;
 
       // Subir archivo comprimido a Supabase Storage
       const { error: uploadError } = await supabase.storage
@@ -302,19 +298,18 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="bg-gradient-to-r from-teal-600 to-teal-700 text-white p-6 flex items-center justify-between">
-          <h2 className="text-2xl font-bold">Panel de Administración</h2>
-          <button
-            onClick={onClose}
-            className="hover:bg-white/20 p-2 rounded-lg transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
+    <div className="min-h-screen bg-gray-100">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-lg">
+        <div className="container mx-auto px-4 py-6">
+          <h1 className="text-3xl font-bold">Panel de Administración</h1>
+          <p className="text-teal-100 mt-1">Gestiona tus artículos, categorías y publicidades</p>
         </div>
+      </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+      {/* Contenido */}
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-white rounded-lg shadow-md p-6">
           {!showForm && !showCategoryManager && !showAdsManager ? (
             <>
               <div className="flex gap-4 mb-6 flex-wrap">
@@ -344,159 +339,95 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
                 </button>
               </div>
 
-              <div className="space-y-4">
+              {/* Lista de artículos en formato Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {articles.map((article) => (
                   <div
                     key={article.id}
-                    className="bg-gray-50 rounded-lg p-4 flex items-center justify-between"
+                    className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow group"
                   >
-                    <div className="flex-1">
-                      <h3 className="font-bold text-lg text-gray-900">{article.title}</h3>
-                      <div className="flex items-center space-x-3 mt-2 text-sm text-gray-600">
+                    {/* Imagen del artículo */}
+                    <div className="relative h-48 bg-gray-200">
+                      {article.image_url ? (
+                        <img
+                          src={article.image_url}
+                          alt={article.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                          <span>Sin imagen</span>
+                        </div>
+                      )}
+                      {/* Badges */}
+                      <div className="absolute top-2 left-2 flex flex-wrap gap-2">
                         {article.category && (
                           <span
-                            className="px-2 py-1 rounded text-white text-xs"
+                            className="px-2 py-1 rounded text-white text-xs font-semibold"
                             style={{ backgroundColor: article.category.color }}
                           >
                             {article.category.name}
                           </span>
                         )}
                         {article.is_featured && (
-                          <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs">
+                          <span className="bg-yellow-500 text-white px-2 py-1 rounded text-xs font-semibold">
                             Destacado
                           </span>
                         )}
-                        <span>{article.published_at ? 'Publicado' : 'Borrador'}</span>
+                      </div>
+                      {/* Estado de publicación */}
+                      <div className="absolute top-2 right-2">
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                          article.published_at 
+                            ? 'bg-green-500 text-white' 
+                            : 'bg-gray-500 text-white'
+                        }`}>
+                          {article.published_at ? 'Publicado' : 'Borrador'}
+                        </span>
                       </div>
                     </div>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleEdit(article)}
-                        className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg transition-colors"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(article.id)}
-                        className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+
+                    {/* Contenido */}
+                    <div className="p-4">
+                      <h3 className="font-bold text-lg text-gray-900 mb-2 line-clamp-2 group-hover:text-teal-600 transition-colors">
+                        {article.title}
+                      </h3>
+                      {article.excerpt && (
+                        <p className="text-gray-600 text-sm mb-4 line-clamp-3">
+                          {article.excerpt}
+                        </p>
+                      )}
+                      
+                      {/* Botones de acción */}
+                      <div className="flex gap-2 mt-4">
+                        <button
+                          onClick={() => handleEdit(article)}
+                          className="flex-1 flex items-center justify-center gap-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-lg transition-colors text-sm font-medium"
+                        >
+                          <Edit className="w-4 h-4" />
+                          <span>Editar</span>
+                        </button>
+                        <button
+                          onClick={() => handleDelete(article.id)}
+                          className="flex-1 flex items-center justify-center gap-1 bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg transition-colors text-sm font-medium"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span>Eliminar</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
+
+              {/* Mensaje si no hay artículos */}
+              {articles.length === 0 && (
+                <div className="text-center py-12 bg-gray-50 rounded-lg">
+                  <p className="text-gray-500 text-lg">No hay artículos creados</p>
+                  <p className="text-gray-400 text-sm mt-2">Haz clic en "Nuevo Artículo" para crear uno</p>
+                </div>
+              )}
             </>
-          ) : showAdsManager ? (
-            <div>
-              <button
-                onClick={() => setShowAdsManager(false)}
-                className="flex items-center space-x-2 text-teal-600 hover:text-teal-700 mb-6"
-              >
-                <ArrowLeft className="w-5 h-5" />
-                <span>Volver</span>
-              </button>
-              <AdsManager />
-            </div>
-          ) : showCategoryManager ? (
-            <div>
-              <button
-                onClick={() => setShowCategoryManager(false)}
-                className="flex items-center space-x-2 text-teal-600 hover:text-teal-700 mb-6"
-              >
-                <ArrowLeft className="w-5 h-5" />
-                <span>Volver</span>
-              </button>
-
-              <h3 className="text-xl font-bold mb-4">Gestionar Categorías</h3>
-
-              <div className="mb-8 bg-blue-50 p-6 rounded-lg">
-                <h4 className="font-semibold mb-4">Agregar Nueva Categoría</h4>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
-                    <input
-                      type="text"
-                      value={newCategory.name}
-                      onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-                      placeholder="Ej: Política"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Color</label>
-                    <div className="flex gap-4 items-center">
-                      <input
-                        type="color"
-                        value={newCategory.color}
-                        onChange={(e) => setNewCategory({ ...newCategory, color: e.target.value })}
-                        className="w-20 h-10 rounded-lg cursor-pointer"
-                      />
-                      <div
-                        className="w-20 h-10 rounded-lg border-2 border-gray-300"
-                        style={{ backgroundColor: newCategory.color }}
-                      />
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleAddCategory}
-                    className="w-full bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
-                  >
-                    Agregar Categoría
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="font-semibold mb-4">Categorías Existentes</h4>
-                <div className="space-y-3">
-                  {categories.map((category) => (
-                    <div
-                      key={category.id}
-                      className="bg-gray-50 p-4 rounded-lg flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-4 flex-1">
-                        <div
-                          className="w-12 h-12 rounded-lg border-2 border-gray-300"
-                          style={{ backgroundColor: category.color }}
-                        />
-                        <div>
-                          <p className="font-semibold">{category.name}</p>
-                          <p className="text-sm text-gray-600">{category.slug}</p>
-                        </div>
-                      </div>
-                      {editingCategory === category.id ? (
-                        <div className="flex gap-2">
-                          <input
-                            type="color"
-                            defaultValue={category.color}
-                            onChange={(e) => {
-                              handleUpdateCategory(category.id, { color: e.target.value });
-                            }}
-                            className="w-12 h-10 rounded-lg cursor-pointer"
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => setEditingCategory(category.id)}
-                            className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg transition-colors"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCategory(category.id)}
-                            className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
           ) : showAdsManager ? (
             <div>
               <button

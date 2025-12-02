@@ -24,18 +24,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
   },
-  global: {
-    headers: {
-      'X-Client-Info': 'ciudanosweb-client',
-      'Content-Type': 'application/json',
-    },
-    fetch: (...args) => {
-      // Añadir headers personalizados para CORS si es necesario
-      const request = new Request(...args);
-      request.headers.set('Content-Type', 'application/json');
-      return fetch(request);
-    },
-  },
 });
 
 export type Category = {

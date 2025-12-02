@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Plus, Edit, Trash2, Save, Upload, Settings, ArrowLeft } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import ReactQuill from 'react-quill';
@@ -6,6 +6,7 @@ import 'react-quill/dist/quill.snow.css';
 import { supabase, Article, Category } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import AdsManager from './AdsManager';
+import ArticleEditor from './ArticleEditor';
 
 type AdminPanelProps = {
   onClose: () => void;
@@ -28,6 +29,26 @@ type CategoryForm = {
   color: string;
 };
 
+// Wrapper component to suppress findDOMNode warning
+const QuillWrapper = React.forwardRef<any, any>((props, ref) => {
+  const originalWarn = console.warn;
+  console.warn = (...args) => {
+    if (args[0]?.includes && args[0].includes('findDOMNode is deprecated')) {
+      return;
+    }
+    originalWarn(...args);
+  };
+  
+  React.useEffect(() => {
+    return () => {
+      console.warn = originalWarn;
+    };
+  }, []);
+  
+  return <ReactQuill {...props} ref={ref} />;
+});
+QuillWrapper.displayName = 'QuillWrapper';
+
 const modules = {
   toolbar: [
     [{ header: [1, 2, 3, false] }],
@@ -45,6 +66,8 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [editingArticle, setEditingArticle] = useState<string | null>(null);
+  const [articleToEdit, setArticleToEdit] = useState<Article | null>(null);
+  const [showArticleEditor, setShowArticleEditor] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [showAdsManager, setShowAdsManager] = useState(false);
@@ -252,18 +275,8 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
   };
 
   const handleEdit = (article: Article) => {
-    setEditingArticle(article.id);
-    setFormData({
-      title: article.title,
-      subtitle: article.subtitle || '',
-      content: article.content,
-      excerpt: article.excerpt || '',
-      category_id: article.category_id || '',
-      image_url: article.image_url || '',
-      is_featured: article.is_featured,
-      published: !!article.published_at,
-    });
-    setShowForm(true);
+    setArticleToEdit(article);
+    setShowArticleEditor(true);
   };
 
   const handleDelete = async (id: string) => {
@@ -306,7 +319,10 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
             <>
               <div className="flex gap-4 mb-6 flex-wrap">
                 <button
-                  onClick={() => setShowForm(true)}
+                  onClick={() => {
+                    setArticleToEdit(null);
+                    setShowArticleEditor(true);
+                  }}
                   className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-semibold flex items-center space-x-2 transition-colors"
                 >
                   <Plus className="w-5 h-5" />
@@ -697,7 +713,7 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Contenido (Editor Enriquecido)</label>
-                <ReactQuill
+                <QuillWrapper
                   value={formData.content}
                   onChange={(value) => setFormData({ ...formData, content: value })}
                   modules={modules}
@@ -748,6 +764,22 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
           )}
         </div>
       </div>
+
+      {/* Nuevo Editor de Artículos */}
+      {showArticleEditor && (
+        <ArticleEditor
+          onClose={() => {
+            setShowArticleEditor(false);
+            setArticleToEdit(null);
+          }}
+          onSave={() => {
+            loadArticles();
+            setShowArticleEditor(false);
+            setArticleToEdit(null);
+          }}
+          editingArticle={articleToEdit}
+        />
+      )}
     </div>
   );
 }

@@ -25,6 +25,10 @@ type CategoryForm = {
   color: string;
 };
 
+type AdminPanelProps = {
+  onClose?: () => void;
+};
+
 // Wrapper component to suppress findDOMNode warning
 const QuillWrapper = React.forwardRef<any, any>((props, ref) => {
   const originalWarn = console.warn;
@@ -302,7 +306,17 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
       {/* Header */}
       <div className="bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-lg">
         <div className="container mx-auto px-4 py-6">
-          <h1 className="text-3xl font-bold">Panel de Administración</h1>
+            <div className="flex items-center justify-between">
+              <h1 className="text-3xl font-bold">Panel de Administración</h1>
+              {onClose && (
+                <button
+                  onClick={onClose}
+                  className="text-teal-600 hover:text-teal-700 bg-white px-3 py-2 rounded-lg shadow-sm"
+                >
+                  Volver
+                </button>
+              )}
+            </div>
           <p className="text-teal-100 mt-1">Gestiona tus artículos, categorías y publicidades</p>
         </div>
       </div>
@@ -646,7 +660,7 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Contenido (Editor Enriquecido)</label>
                 <QuillWrapper
                   value={formData.content}
-                  onChange={(value) => setFormData({ ...formData, content: value })}
+                  onChange={(value: string) => setFormData({ ...formData, content: value })}
                   modules={modules}
                   theme="snow"
                   style={{ height: '300px', marginBottom: '50px' }}

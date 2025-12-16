@@ -15,12 +15,55 @@ export default function SocialShare({ url, title, description, imageUrl }: Socia
 
   const encodedUrl = encodeURIComponent(url);
   const encodedTitle = encodeURIComponent(title);
+  const encodedDescription = encodeURIComponent(description || '');
 
   const shareLinks = {
     facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
-    twitter: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`,
+    // Incluir texto (título + descripción) en Twitter y mensaje en WhatsApp
+    twitter: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}%20${encodedDescription}`,
     linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
-    whatsapp: `https://wa.me/?text=${encodedTitle}%20${encodedUrl}`,
+    whatsapp: `https://wa.me/?text=${encodedTitle}%20${encodedDescription}%20${encodedUrl}`,
+  };
+
+  const handleNativeShare = async () => {
+    if ((navigator as any).share) {
+      try {
+        // Intentar compartir imagen si está disponible (Web Share Level 2)
+        if (imageUrl && (navigator as any).canShare) {
+          try {
+            const res = await fetch(imageUrl);
+            const blob = await res.blob();
+            const file = new File([blob], 'image.jpg', { type: blob.type });
+            const shareData: any = {
+              title,
+              text: description ? `${title} - ${description}` : title,
+              url,
+              files: [file],
+            };
+            if ((navigator as any).canShare(shareData)) {
+              await (navigator as any).share(shareData);
+              setShowMenu(false);
+              return;
+            }
+          } catch (err) {
+            // Si falla compartir el archivo, caer a compartir sin archivos
+            console.warn('Fallo al preparar la imagen para compartir nativo:', err);
+          }
+        }
+
+        await (navigator as any).share({
+          title,
+          text: description ? `${title} - ${description}` : title,
+          url,
+        });
+        setShowMenu(false);
+      } catch (err) {
+        console.error('Error en compartir nativo:', err);
+        alert('No se pudo compartir con el método nativo');
+      }
+    } else {
+      alert('Compartir nativo no disponible en este navegador');
+    }
   };
 
   const handleShare = (platform: keyof typeof shareLinks) => {
@@ -88,6 +131,17 @@ export default function SocialShare({ url, title, description, imageUrl }: Socia
                   <Eye size={18} className="text-white" />
                 </div>
                 <span className="text-gray-700 font-medium">Vista Previa</span>
+              </button>
+
+              {/* Compartir Nativo */}
+              <button
+                onClick={handleNativeShare}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors group"
+              >
+                <div className="w-8 h-8 flex items-center justify-center bg-indigo-600 rounded-full group-hover:bg-indigo-700 transition-colors">
+                  <Share2 size={18} className="text-white" />
+                </div>
+                <span className="text-gray-700 font-medium">Compartir...</span>
               </button>
 
               {/* Facebook */}

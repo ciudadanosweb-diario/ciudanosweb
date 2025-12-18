@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { supabase, Article } from './lib/supabase';
 import Header from './components/Header';
@@ -14,6 +14,7 @@ import ArticleDetail from './pages/ArticleDetail';
 function App() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [articles, setArticles] = useState<Article[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showLoginAdmin, setShowLoginAdmin] = useState(false);
@@ -21,6 +22,14 @@ function App() {
   useEffect(() => {
     loadArticles();
   }, [selectedCategory]);
+
+  // Redirigir a la página principal si el usuario cierra sesión mientras está en /admin
+  useEffect(() => {
+    if (!loading && !user && location.pathname === '/admin') {
+      console.log('Usuario no autenticado en /admin, redirigiendo a inicio...');
+      navigate('/');
+    }
+  }, [user, loading, location.pathname, navigate]);
 
   const loadArticles = async () => {
     let query = supabase

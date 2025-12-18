@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Upload, Save, Loader, Image as ImageIcon } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import ReactQuill from 'react-quill';
@@ -50,6 +50,7 @@ const quillFormats = [
 
 export default function ArticleEditor({ onClose, onSave, editingArticle }: ArticleEditorProps) {
   const { user } = useAuth();
+  const quillRef = useRef<ReactQuill>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -432,6 +433,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
             </label>
             <div className="border border-gray-300 rounded-lg overflow-hidden">
               <ReactQuill
+                ref={quillRef}
                 theme="snow"
                 value={formData.content}
                 onChange={(value) => setFormData({ ...formData, content: value })}

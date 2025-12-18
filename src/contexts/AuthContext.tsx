@@ -17,23 +17,33 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Solo cargar si hay una sesión activa
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error('Error getting session:', error);
-        // Limpiar estado si hay error de sesión
+    // Verificar sesión inicial
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Error getting session:', error);
+          setUser(null);
+          setProfile(null);
+        } else {
+          setUser(session?.user ?? null);
+          if (session?.user) {
+            await loadProfile(session.user.id);
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
         setUser(null);
         setProfile(null);
-        return;
+      } finally {
+        setLoading(false);
       }
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadProfile(session.user.id);
-      }
-    });
+    };
+
+    initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       try {
@@ -74,7 +84,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadProfile = async (userId: string) => {
     try {
-      setLoading(true);
       const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
       if (error) {
         // Si el error está relacionado con tokens, manejarlo y salir
@@ -85,8 +94,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('Error loading profile:', err);
       setProfile(null);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -129,18 +136,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     try {
+      console.log('Cerrando sesión...');
+      
+      // Cerrar sesión en Supabase
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('Sign out error:', error);
       }
-      // Limpiar estado local independientemente del resultado
+      
+      // Limpiar estado local
       setUser(null);
       setProfile(null);
+      
+      // Limpiar localStorage
+      localStorage.clear();
+      
+      console.log('Sesión cerrada exitosamente');
     } catch (error) {
       console.error('Sign out exception:', error);
       // Limpiar estado local incluso si hay error
       setUser(null);
       setProfile(null);
+      localStorage.clear();
     }
   };
 

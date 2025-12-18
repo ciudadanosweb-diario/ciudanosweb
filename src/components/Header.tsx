@@ -54,7 +54,11 @@ export default function Header() {
             )}
             {user && (
               <button
-                onClick={signOut}
+                onClick={async () => {
+                  await signOut();
+                  // Redirigir a la página principal después de cerrar sesión
+                  navigate('/');
+                }}
                 className="flex items-center space-x-1 md:space-x-2 bg-green-600 hover:bg-green-700 px-2 md:px-4 py-1 md:py-2 rounded-lg transition-colors text-white text-xs md:text-sm whitespace-nowrap"
               >
                 <LogOut className="w-3 h-3 md:w-4 md:h-4" />

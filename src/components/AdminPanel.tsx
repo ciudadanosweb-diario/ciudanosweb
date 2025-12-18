@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Edit, Trash2, Save, Upload, Settings, ArrowLeft } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Plus, Edit, Trash2, Save, Upload, Settings, ArrowLeft, RefreshCw } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
@@ -85,11 +85,99 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
     is_featured: false,
     published: true,
   });
+  const [loading, setLoading] = useState(true);
 
+  // Log cuando el estado loading cambia
   useEffect(() => {
-    loadArticles();
-    loadCategories();
+    console.log('Estado loading cambió a:', loading);
+    console.log('Artículos en estado:', articles.length);
+    console.log('showArticleEditor:', showArticleEditor);
+    console.log('showAdsManager:', showAdsManager);
+    console.log('showCategoryManager:', showCategoryManager);
+  }, [loading, articles, showArticleEditor, showAdsManager, showCategoryManager]);
+
+  const loadArticles = useCallback(async () => {
+    try {
+      console.log('Iniciando carga de artículos...');
+      const { data, error } = await supabase
+        .from('articles')
+        .select('*, category:categories(*)')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading articles:', error);
+        // Si hay error de autenticación, intentar refrescar la sesión
+        if (error.message?.includes('JWT') || error.message?.includes('token')) {
+          console.log('Error de sesión detectado, intentando refrescar...');
+          const { error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError) {
+            console.error('Error al refrescar sesión:', refreshError);
+          } else {
+            console.log('Sesión refrescada, reintentando carga de artículos...');
+            // Reintentar la carga después de refrescar
+            const { data: retryData, error: retryError } = await supabase
+              .from('articles')
+              .select('*, category:categories(*)')
+              .order('created_at', { ascending: false });
+            if (!retryError && retryData) {
+              setArticles(retryData);
+              console.log(`${retryData.length} artículos cargados exitosamente`);
+            }
+          }
+        }
+        return;
+      }
+
+      if (data) {
+        setArticles(data);
+        console.log(`${data.length} artículos cargados exitosamente`);
+      }
+    } catch (error) {
+      console.error('Error al cargar artículos:', error);
+    }
   }, []);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      console.log('Iniciando carga de categorías...');
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name');
+
+      if (error) {
+        console.error('Error loading categories:', error);
+        return;
+      }
+
+      if (data) {
+        setCategories(data);
+        console.log(`${data.length} categorías cargadas exitosamente`);
+      }
+    } catch (error) {
+      console.error('Error al cargar categorías:', error);
+    }
+  }, []);
+
+  const loadData = useCallback(async () => {
+    console.log('loadData: Iniciando carga de datos...');
+    setLoading(true);
+    try {
+      await Promise.all([loadArticles(), loadCategories()]);
+    } catch (error) {
+      console.error('Error en loadData:', error);
+    } finally {
+      setLoading(false);
+      console.log('loadData: Carga completada, loading = false');
+    }
+  }, [loadArticles, loadCategories]);
+
+  // Cargar datos solo al montar el componente
+  useEffect(() => {
+    console.log('Componente montado - cargando datos iniciales');
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Solo cargar una vez al montar
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -171,19 +259,6 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
-
-  const loadArticles = async () => {
-    const { data } = await supabase
-      .from('articles')
-      .select('*, category:categories(*)')
-      .order('created_at', { ascending: false });
-    if (data) setArticles(data);
-  };
-
-  const loadCategories = async () => {
-    const { data } = await supabase.from('categories').select('*').order('name');
-    if (data) setCategories(data);
   };
 
   const handleAddCategory = async () => {
@@ -326,40 +401,64 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
         <div className="bg-white rounded-lg shadow-md p-6">
           {!showForm && !showCategoryManager && !showAdsManager ? (
             <>
-              <div className="flex gap-4 mb-6 flex-wrap">
+              <div className="flex gap-4 mb-6 flex-wrap items-center justify-between">
+                <div className="flex gap-4 flex-wrap">
+                  <button
+                    onClick={() => {
+                      setArticleToEdit(null);
+                      setShowArticleEditor(true);
+                    }}
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-semibold flex items-center space-x-2 transition-colors"
+                  >
+                    <Plus className="w-5 h-5" />
+                    <span>Nuevo Artículo</span>
+                  </button>
+                  <button
+                    onClick={() => setShowCategoryManager(true)}
+                    className="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold flex items-center space-x-2 transition-colors"
+                  >
+                    <Settings className="w-5 h-5" />
+                    <span>Gestionar Categorías</span>
+                  </button>
+                  <button
+                    onClick={() => setShowAdsManager(true)}
+                    className="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold flex items-center space-x-2 transition-colors"
+                  >
+                    <Settings className="w-5 h-5" />
+                    <span>Gestionar Publicidades</span>
+                  </button>
+                </div>
+                
+                {/* Botón de refrescar */}
                 <button
                   onClick={() => {
-                    setArticleToEdit(null);
-                    setShowArticleEditor(true);
+                    console.log('Recargando datos manualmente...');
+                    loadData();
                   }}
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-semibold flex items-center space-x-2 transition-colors"
+                  disabled={loading}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-lg font-semibold flex items-center space-x-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Actualizar artículos"
                 >
-                  <Plus className="w-5 h-5" />
-                  <span>Nuevo Artículo</span>
-                </button>
-                <button
-                  onClick={() => setShowCategoryManager(true)}
-                  className="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold flex items-center space-x-2 transition-colors"
-                >
-                  <Settings className="w-5 h-5" />
-                  <span>Gestionar Categorías</span>
-                </button>
-                <button
-                  onClick={() => setShowAdsManager(true)}
-                  className="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold flex items-center space-x-2 transition-colors"
-                >
-                  <Settings className="w-5 h-5" />
-                  <span>Gestionar Publicidades</span>
+                  <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Actualizar</span>
                 </button>
               </div>
 
-              {/* Lista de artículos en formato Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {articles.map((article) => (
-                  <div
-                    key={article.id}
-                    className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow group"
-                  >
+              {/* Indicador de carga */}
+              {loading ? (
+                <div className="flex justify-center items-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
+                  <span className="ml-3 text-gray-600">Cargando artículos...</span>
+                </div>
+              ) : (
+                <>
+                  {/* Lista de artículos en formato Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {articles.map((article) => (
+                      <div
+                        key={article.id}
+                        className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow group"
+                      >
                     {/* Imagen del artículo */}
                     <div className="relative h-48 bg-gray-200">
                       {article.image_url ? (
@@ -440,6 +539,8 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
                   <p className="text-gray-500 text-lg">No hay artículos creados</p>
                   <p className="text-gray-400 text-sm mt-2">Haz clic en "Nuevo Artículo" para crear uno</p>
                 </div>
+              )}
+                </>
               )}
             </>
           ) : showAdsManager ? (

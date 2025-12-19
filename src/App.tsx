@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { supabase, Article } from './lib/supabase';
@@ -7,12 +7,15 @@ import CategoryNav from './components/CategoryNav';
 import FeaturedCarousel from './components/FeaturedCarousel';
 import ArticleCard from './components/ArticleCard';
 import Sidebar from './components/Sidebar';
-import AdminPanel from './components/AdminPanel';
 import LoginAdmin from './components/LoginAdmin';
-import ArticleDetail from './pages/ArticleDetail';
+
+// Lazy load heavy components
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
+const ArticleDetail = lazy(() => import('./pages/ArticleDetail'));
+const ArticleEditPage = lazy(() => import('./pages/ArticleEditPage'));
 
 function App() {
-  const { user, loading } = useAuth();
+  const { user, loading, isAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [articles, setArticles] = useState<Article[]>([]);
@@ -65,7 +68,15 @@ function App() {
       
       <div className="flex-1 flex flex-col lg:flex-row">
         <div className="flex-1">
-          <Routes>
+          <Suspense fallback={
+            <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
+                <p className="mt-4 text-gray-600">Cargando...</p>
+              </div>
+            </div>
+          }>
+            <Routes>
             <Route
               path="/"
               element={
@@ -101,8 +112,46 @@ function App() {
               }
             />
             <Route path="/article/:id" element={<ArticleDetail />} />
-            <Route path="/admin" element={user ? <AdminPanel /> : <div className="container mx-auto px-4 py-12 text-center"><p className="text-xl text-gray-600">Debes iniciar sesión para acceder al panel de administración</p></div>} />
-          </Routes>
+            <Route
+              path="/admin"
+              element={
+                user && isAdmin ? (
+                  <AdminPanel />
+                ) : (
+                  <div className="container mx-auto px-4 py-12 text-center">
+                    <p className="text-xl text-gray-600">
+                      {user ? 'No tienes permisos para acceder al panel de administración' : 'Debes iniciar sesión para acceder al panel de administración'}
+                    </p>
+                  </div>
+                )
+              }
+            />
+            <Route
+              path="/admin/articles/new"
+              element={
+                user && isAdmin ? (
+                  <ArticleEditPage />
+                ) : (
+                  <div className="container mx-auto px-4 py-12 text-center">
+                    <p className="text-xl text-gray-600">Acceso denegado</p>
+                  </div>
+                )
+              }
+            />
+            <Route
+              path="/admin/articles/edit/:id"
+              element={
+                user && isAdmin ? (
+                  <ArticleEditPage />
+                ) : (
+                  <div className="container mx-auto px-4 py-12 text-center">
+                    <p className="text-xl text-gray-600">Acceso denegado</p>
+                  </div>
+                )
+              }
+            />
+            </Routes>
+          </Suspense>
         </div>
 
         <div className="w-full lg:w-80 px-4 py-8">

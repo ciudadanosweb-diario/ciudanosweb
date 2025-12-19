@@ -94,19 +94,30 @@ export default function ImageGallery({ onSelectImage, selectionMode = false, onC
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file || !user) {
+      console.log('📁 No se seleccionó archivo o usuario no autenticado:', { file: !!file, user: !!user });
+      return;
+    }
 
     if (!file.type.startsWith('image/')) {
+      console.log('❌ Tipo de archivo inválido:', file.type);
       setUploadError('Por favor selecciona una imagen válida');
       setTimeout(() => setUploadError(null), 5000);
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
+      console.log('❌ Archivo demasiado grande:', file.size, 'bytes (máx 10MB)');
       setUploadError('La imagen no debe superar 10MB');
       setTimeout(() => setUploadError(null), 5000);
       return;
     }
+
+    console.log('📤 Iniciando subida de imagen a galería:', {
+      name: file.name,
+      size: file.size,
+      type: file.type
+    });
 
     setUploading(true);
     setUploadProgress(10);
@@ -133,22 +144,35 @@ export default function ImageGallery({ onSelectImage, selectionMode = false, onC
         quality: 0.8,
       };
 
+      console.log('🗜️ Comenzando compresión...');
       setUploadProgress(30);
       const compressedFile = await imageCompression(file, options);
+      console.log('✅ Imagen comprimida:', {
+        originalSize: file.size,
+        compressedSize: compressedFile.size,
+        compressionRatio: Math.round((1 - compressedFile.size / file.size) * 100) + '%'
+      });
 
       setUploadProgress(50);
 
       // Crear nombre único
       const timestamp = Date.now();
       const fileName = `imagenes/${timestamp}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      console.log('📝 Nombre de archivo generado:', fileName);
 
       // Obtener sesión
+      console.log('🔐 Verificando sesión...');
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('No hay sesión activa');
+      if (!session) {
+        console.error('❌ No hay sesión activa');
+        throw new Error('No hay sesión activa');
+      }
+      console.log('✅ Sesión verificada');
 
       // Subir usando fetch directo
       const uploadUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/article-images/${fileName}`;
-      
+      console.log('☁️ Subiendo via fetch a:', uploadUrl);
+
       const uploadResponse = await fetch(uploadUrl, {
         method: 'POST',
         headers: {
@@ -160,11 +184,19 @@ export default function ImageGallery({ onSelectImage, selectionMode = false, onC
         signal: abortControllerRef.current.signal,
       });
 
+      console.log('📡 Respuesta del servidor:', {
+        status: uploadResponse.status,
+        statusText: uploadResponse.statusText,
+        ok: uploadResponse.ok
+      });
+
       if (!uploadResponse.ok) {
         const errorData = await uploadResponse.json();
+        console.error('❌ Error en respuesta del servidor:', errorData);
         throw new Error(errorData.message || 'Error al subir imagen');
       }
 
+      console.log('✅ Archivo subido exitosamente via fetch');
       setUploadProgress(100);
       
       setTimeout(() => {
@@ -174,8 +206,15 @@ export default function ImageGallery({ onSelectImage, selectionMode = false, onC
         loadImages(); // Recargar galería
       }, 1000);
 
+      console.log('🎉 Subida completada exitosamente');
     } catch (error: any) {
-      console.error('Error al subir imagen:', error);
+      console.error('💥 Error completo en subida de imagen:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+        code: error.code,
+        details: error.details
+      });
       
       if (error.name === 'AbortError') {
         setUploadError('Carga cancelada o tiempo agotado');

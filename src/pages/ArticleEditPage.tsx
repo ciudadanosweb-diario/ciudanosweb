@@ -1,18 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { X, Upload, Save, Loader, Image as ImageIcon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { X, Upload, Save, Loader, Image as ImageIcon, ArrowLeft } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import MDEditor from '@uiw/react-md-editor';
 import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
 import { supabase, Article, Category } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import ImageGallery from './ImageGallery';
-
-type ArticleEditorProps = {
-  onClose: () => void;
-  onSave: () => void;
-  editingArticle?: Article | null;
-};
+import ImageGallery from '../components/ImageGallery';
 
 type ArticleForm = {
   title: string;
@@ -25,11 +20,14 @@ type ArticleForm = {
   published_at: string | null;
 };
 
-export default function ArticleEditor({ onClose, onSave, editingArticle }: ArticleEditorProps) {
-  const { user } = useAuth();
+export default function ArticleEditPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { user, isAdmin } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [imagePreview, setImagePreview] = useState<string>('');
   const [showGallery, setShowGallery] = useState(false);
 
@@ -45,22 +43,18 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
   });
 
   useEffect(() => {
-    loadCategories();
-    
-    if (editingArticle) {
-      setFormData({
-        title: editingArticle.title,
-        subtitle: editingArticle.subtitle || '',
-        content: editingArticle.content,
-        excerpt: editingArticle.excerpt || '',
-        category_id: editingArticle.category_id || '',
-        image_url: editingArticle.image_url || '',
-        is_featured: editingArticle.is_featured || false,
-        published_at: editingArticle.published_at || null,
-      });
-      setImagePreview(editingArticle.image_url || '');
+    if (!user || !isAdmin) {
+      navigate('/admin');
+      return;
     }
-  }, [editingArticle]);
+
+    loadCategories();
+    if (id && id !== 'new') {
+      loadArticle();
+    } else {
+      setLoading(false);
+    }
+  }, [user, isAdmin, id, navigate]);
 
   const loadCategories = async () => {
     try {
@@ -69,17 +63,49 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
         .from('categories')
         .select('*')
         .order('name');
-      
+
       if (error) {
         console.error('❌ Error al cargar categorías:', error);
         throw error;
       }
-      
+
       console.log('✅ Categorías cargadas:', data?.length || 0, data);
       setCategories(data || []);
     } catch (error: any) {
       console.error('❌ Excepción al cargar categorías:', error);
       alert('Error al cargar categorías: ' + error.message);
+    }
+  };
+
+  const loadArticle = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('articles')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setFormData({
+          title: data.title,
+          subtitle: data.subtitle || '',
+          content: data.content,
+          excerpt: data.excerpt || '',
+          category_id: data.category_id || '',
+          image_url: data.image_url || '',
+          is_featured: data.is_featured || false,
+          published_at: data.published_at || null,
+        });
+        setImagePreview(data.image_url || '');
+      }
+    } catch (error: any) {
+      console.error('Error cargando artículo:', error);
+      alert('Error al cargar el artículo: ' + error.message);
+      navigate('/admin');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -156,7 +182,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
 
       setFormData({ ...formData, image_url: publicUrl });
       setImagePreview(publicUrl);
-      
+
       console.log('🎉 Subida completada exitosamente');
     } catch (error: any) {
       console.error('💥 Error completo en subida de imagen:', {
@@ -207,11 +233,11 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
       };
 
       let error;
-      if (editingArticle) {
+      if (id && id !== 'new') {
         const result = await supabase
           .from('articles')
           .update(articleData)
-          .eq('id', editingArticle.id);
+          .eq('id', id);
         error = result.error;
       } else {
         const result = await supabase
@@ -222,34 +248,52 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
 
       if (error) throw error;
 
-      alert(editingArticle ? 'Artículo actualizado exitosamente' : 'Artículo publicado exitosamente');
-      onSave();
-      onClose();
-      
+      console.log('✅ Artículo guardado exitosamente');
+      navigate('/admin');
     } catch (error: any) {
-      console.error('Error al guardar artículo:', error);
+      console.error('❌ Error al guardar artículo:', error);
       alert('Error al guardar artículo: ' + error.message);
     } finally {
       setSaving(false);
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-lg max-w-4xl w-full my-8">
-        <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white z-10 rounded-t-lg">
-          <h2 className="text-2xl font-bold">
-            {editingArticle ? 'Editar Artículo' : 'Nuevo Artículo'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando...</p>
         </div>
+      </div>
+    );
+  }
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+  return (
+    <div className="min-h-screen bg-gray-100">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-4xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => navigate('/admin')}
+                className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                <span>Volver al Panel</span>
+              </button>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {id === 'new' ? 'Nuevo Artículo' : 'Editar Artículo'}
+              </h1>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Formulario */}
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm p-6 space-y-6">
           {/* Título */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -260,6 +304,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              placeholder="Título del artículo"
               required
             />
           </div>
@@ -267,20 +312,21 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
           {/* Subtítulo */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Subtítulo
+              Subtítulo (opcional)
             </label>
             <input
               type="text"
               value={formData.subtitle}
               onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })}
               className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              placeholder="Subtítulo del artículo"
             />
           </div>
 
           {/* Categoría */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Categoría * {categories.length > 0 && `(${categories.length} disponibles)`}
+              Categoría *
             </label>
             <select
               value={formData.category_id}
@@ -288,54 +334,46 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
               className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
               required
             >
-              <option value="">
-                {categories.length === 0 ? 'Cargando categorías...' : 'Seleccionar categoría'}
-              </option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
+              <option value="">Seleccionar categoría</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
                 </option>
               ))}
             </select>
-            {categories.length === 0 && (
-              <p className="text-sm text-amber-600 mt-1">
-                ⚠️ No se encontraron categorías. Por favor, crea categorías primero.
-              </p>
-            )}
           </div>
 
           {/* Imagen */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Imagen Principal
+              Imagen del artículo
             </label>
-            <div className="flex gap-2">
-              <label className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border-2 border-dashed rounded-lg cursor-pointer hover:bg-gray-50">
+            <div className="flex items-center space-x-4">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+                id="image-upload"
+                disabled={uploading}
+              />
+              <label
+                htmlFor="image-upload"
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 cursor-pointer disabled:opacity-50"
+              >
                 {uploading ? (
-                  <>
-                    <Loader className="w-5 h-5 animate-spin" />
-                    <span>Subiendo...</span>
-                  </>
+                  <Loader className="w-4 h-4 animate-spin" />
                 ) : (
-                  <>
-                    <Upload className="w-5 h-5" />
-                    <span>Subir Imagen</span>
-                  </>
+                  <Upload className="w-4 h-4" />
                 )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                  disabled={uploading}
-                />
+                <span>{uploading ? 'Subiendo...' : 'Subir imagen'}</span>
               </label>
               <button
                 type="button"
                 onClick={() => setShowGallery(true)}
-                className="px-4 py-2 border rounded-lg hover:bg-gray-50 flex items-center gap-2"
+                className="flex items-center space-x-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
               >
-                <ImageIcon className="w-5 h-5" />
+                <ImageIcon className="w-4 h-4" />
                 <span>Galería</span>
               </button>
             </div>
@@ -344,7 +382,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
                 <img
                   src={imagePreview}
                   alt="Preview"
-                  className="w-full h-48 object-cover rounded-lg"
+                  className="max-w-md h-auto rounded-lg shadow-sm"
                 />
               </div>
             )}
@@ -362,7 +400,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
                 preview="edit"
                 hideToolbar={false}
                 visibleDragBar={false}
-                height={400}
+                height={500}
               />
             </div>
           </div>
@@ -395,41 +433,49 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
             </label>
           </div>
 
+          {/* Fecha de publicación */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Fecha de publicación
+            </label>
+            <input
+              type="datetime-local"
+              value={formData.published_at ? new Date(formData.published_at).toISOString().slice(0, 16) : ''}
+              onChange={(e) => setFormData({ ...formData, published_at: e.target.value ? new Date(e.target.value).toISOString() : null })}
+              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
           {/* Botones */}
-          <div className="flex justify-end gap-4 pt-4 border-t">
+          <div className="flex justify-end space-x-4 pt-6 border-t">
             <button
               type="button"
-              onClick={onClose}
-              className="px-6 py-2 border rounded-lg hover:bg-gray-50"
+              onClick={() => navigate('/admin')}
+              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              className="flex items-center space-x-2 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors"
             >
               {saving ? (
-                <>
-                  <Loader className="w-5 h-5 animate-spin" />
-                  <span>Guardando...</span>
-                </>
+                <Loader className="w-4 h-4 animate-spin" />
               ) : (
-                <>
-                  <Save className="w-5 h-5" />
-                  <span>{editingArticle ? 'Actualizar' : 'Publicar'}</span>
-                </>
+                <Save className="w-4 h-4" />
               )}
+              <span>{saving ? 'Guardando...' : 'Guardar'}</span>
             </button>
           </div>
         </form>
       </div>
 
+      {/* Galería de imágenes */}
       {showGallery && (
         <ImageGallery
-          onSelectImage={handleImageSelect}
-          selectionMode={true}
           onClose={() => setShowGallery(false)}
+          onSelectImage={handleImageSelect}
         />
       )}
     </div>

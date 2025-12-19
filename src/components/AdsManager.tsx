@@ -46,19 +46,30 @@ export default function AdsManager() {
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file || !user) {
+      console.log('📁 No se seleccionó archivo o usuario no autenticado:', { file: !!file, user: !!user });
+      return;
+    }
 
     // Validar tipo de archivo
     if (!file.type.startsWith('image/')) {
+      console.log('❌ Tipo de archivo inválido:', file.type);
       alert('Por favor selecciona una imagen válida');
       return;
     }
 
     // Validar tamaño inicial (máximo 10MB antes de comprimir)
     if (file.size > 10 * 1024 * 1024) {
+      console.log('❌ Archivo demasiado grande:', file.size, 'bytes (máx 10MB)');
       alert('La imagen no debe superar 10MB');
       return;
     }
+
+    console.log('📤 Iniciando subida de imagen para ads:', {
+      name: file.name,
+      size: file.size,
+      type: file.type
+    });
 
     setUploading(true);
     setUploadProgress(0);
@@ -74,7 +85,7 @@ export default function AdsManager() {
       };
 
       setUploadProgress(25);
-
+      console.log('🗜️ Comenzando compresión...');
       const compressedFile = await imageCompression(file, options);
 
       console.log('Imagen original:', file.size, 'bytes');
@@ -86,8 +97,22 @@ export default function AdsManager() {
       // Crear nombre único para el archivo
       const timestamp = new Date().getTime();
       const fileName = `imagenes/${timestamp}-${file.name}`;
+      console.log('📝 Nombre de archivo generado:', fileName);
+
+      // Verificar sesión
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        console.error('❌ Error al obtener sesión:', sessionError);
+        throw new Error('Error de autenticación: ' + sessionError.message);
+      }
+      if (!session) {
+        console.error('❌ No hay sesión activa');
+        throw new Error('No hay sesión activa');
+      }
+      console.log('🔐 Sesión verificada');
 
       // Subir archivo comprimido a Supabase Storage
+      console.log('☁️ Subiendo a bucket ads...');
       const { error: uploadError } = await supabase.storage
         .from('ads')
         .upload(fileName, compressedFile, {
@@ -96,14 +121,20 @@ export default function AdsManager() {
           contentType: 'image/jpeg',
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('❌ Error en subida a Supabase:', uploadError);
+        throw uploadError;
+      }
 
+      console.log('✅ Archivo subido exitosamente');
       setUploadProgress(75);
 
       // Obtener URL pública del archivo
       const { data: { publicUrl } } = supabase.storage
         .from('ads')
         .getPublicUrl(fileName);
+
+      console.log('🔗 URL pública obtenida:', publicUrl);
 
       // Construir URL segura con transformaciones si es necesario
       const imageUrl = publicUrl.includes('?') 
@@ -114,12 +145,20 @@ export default function AdsManager() {
       setFormData({ ...formData, image_url: imageUrl });
       setUploadProgress(100);
 
+      console.log('🎉 Subida completada exitosamente');
+
       setTimeout(() => {
         setUploadProgress(0);
         setUploading(false);
       }, 1000);
     } catch (error) {
-      console.error('Error al subir imagen:', error);
+      console.error('💥 Error completo en subida de imagen:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+        code: error.code,
+        details: error.details
+      });
       alert('Error al subir la imagen. Intenta de nuevo.');
       setUploading(false);
       setUploadProgress(0);

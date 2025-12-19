@@ -23,8 +23,33 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
+    detectSessionInUrl: true,
+    // Asegurar uso de localStorage del navegador para persistir sesión
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    storageKey: 'sb-ciudanosweb-auth',
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'ciudanosweb-client',
+    },
   },
 });
+
+// Diagnóstico básico del cliente
+if (typeof window !== 'undefined') {
+  console.log('🧪 [SupabaseClient] persistSession=true autoRefreshToken=true storage=localStorage storageKey=sb-ciudanosweb-auth');
+  
+  // Agregar listener para errores de red en storage
+  supabase.storage.onError = (error: any) => {
+    console.error('🚨 [Supabase Storage Error]:', {
+      message: error.message,
+      name: error.name,
+      status: error.status,
+      details: error.details,
+      hint: error.hint
+    });
+  };
+}
 
 export type Category = {
   id: string;

@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Eye, Clock, User } from 'lucide-react';
 import { supabase, Article } from '../lib/supabase';
 import SocialShare from '../components/SocialShare';
+import MDEditor from '@uiw/react-md-editor';
+import '@uiw/react-markdown-preview/markdown.css';
 
 export default function ArticleDetail() {
   const { id } = useParams<{ id: string }>();
@@ -199,11 +201,13 @@ export default function ArticleDetail() {
               </div>
             )}
 
-            {/* Contenido del artículo con HTML renderizado */}
-            <div 
-              className="prose prose-lg max-w-none text-gray-800 leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: article.content }}
-            />
+            {/* Contenido del artículo con Markdown renderizado */}
+            <div className="prose prose-lg max-w-none text-gray-800 leading-relaxed">
+              <MDEditor.Markdown 
+                source={article.content} 
+                style={{ backgroundColor: 'transparent', color: 'inherit' }}
+              />
+            </div>
 
             <div className="mt-12 pt-8 border-t-2 border-gray-200">
               <div className="bg-gray-50 rounded-lg p-6">

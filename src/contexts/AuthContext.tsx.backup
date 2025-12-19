@@ -1,0 +1,344 @@
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
+import { User } from '@supabase/supabase-js';
+import { supabase, Profile } from '../lib/supabase';
+
+type AuthContextType = {
+  user: User | null;
+  profile: Profile | null;
+  loading: boolean;
+  isAdmin: boolean;
+  authRefreshing: boolean;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
+  signOut: () => Promise<void>;
+};
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const loggedOutRef = useRef(false);
+  const [authRefreshing, setAuthRefreshing] = useState(false);
+
+  const logAuthDiagnostics = (label: string, session?: any) => {
+    try {
+      const now = new Date();
+      const sbKeys: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('sb-')) sbKeys.push(key);
+      }
+      console.log(`🧪 [AuthDiag:${label}] time=${now.toISOString()} online=${navigator.onLine} vis=${document.visibilityState}`);
+      console.log(`🧪 [AuthDiag:${label}] sb-keys-count=${sbKeys.length} keys=${sbKeys.join(', ') || 'none'}`);
+      if (session) {
+        const exp = session.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'n/a';
+        console.log(`🧪 [AuthDiag:${label}] session user=${session.user?.id || 'none'} exp=${exp}`);
+      } else {
+        console.log(`🧪 [AuthDiag:${label}] session=none`);
+      }
+    } catch (e) {
+      console.warn('Auth diagnostics error:', e);
+    }
+  };
+
+  useEffect(() => {
+    // Verificar sesión inicial
+    const initializeAuth = async () => {
+      try {
+        console.log('🔐 Iniciando autenticación...');
+        console.log('🌐 Estado de conexión:', navigator.onLine ? 'Online' : 'Offline');
+        
+        if (!navigator.onLine) {
+          console.warn('⚠️ No hay conexión a internet');
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
+        
+        const { data: { session }, error } = await supabase.auth.getSession();
+        logAuthDiagnostics('init:getSession', session);
+        
+        if (error) {
+          console.error('❌ Error al obtener sesión:', error);
+          setUser(null);
+          setProfile(null);
+        } else if (session?.user) {
+          console.log('✅ Sesión encontrada para usuario:', session.user.id);
+          setUser(session.user);
+          await loadProfile(session.user.id);
+        } else {
+          console.log('ℹ️ No hay sesión activa');
+          setUser(null);
+          setProfile(null);
+        }
+      } catch (error) {
+        console.error('❌ Error al inicializar autenticación:', error);
+        setUser(null);
+        setProfile(null);
+      } finally {
+        setLoading(false);
+        console.log('✅ Autenticación inicializada');
+      }
+    };
+
+    initializeAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔄 Cambio de estado de autenticación:', event, session?.user?.id || 'sin usuario');
+      logAuthDiagnostics(`onAuth:${event}`, session);
+      try {
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          await loadProfile(session.user.id);
+        } else {
+          setProfile(null);
+        }
+      } catch (error) {
+        console.error('❌ Error en cambio de estado de autenticación:', error);
+        // Limpiar estado en caso de error
+        setUser(null);
+        setProfile(null);
+      }
+    });
+
+    // Listeners de conexión a internet
+    const handleOnline = () => {
+      console.log('🌐 Conexión restaurada');
+      logAuthDiagnostics('net:online');
+      // Intentar refrescar la sesión cuando se recupere la conexión
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        logAuthDiagnostics('net:online:getSession', session);
+        if (session?.user) {
+          console.log('✅ Sesión restaurada después de reconexión');
+          setUser(session.user);
+          loadProfile(session.user.id);
+        }
+      });
+    };
+
+    const handleOffline = () => {
+      console.warn('⚠️ Conexión perdida');
+      logAuthDiagnostics('net:offline');
+    };
+
+    // Eliminado: Listener de storage que interfería con reautenticación
+
+    // Refrescar sesión al volver a la pestaña
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        console.log('👀 Pestaña activa, refrescando sesión');
+        try {
+          setAuthRefreshing(true);
+          const { data, error } = await supabase.auth.refreshSession();
+          if (error) {
+            console.warn('⚠️ Error al refrescar en visibilidad:', error.message);
+          }
+          const session = data?.session ?? (await supabase.auth.getSession()).data.session;
+          logAuthDiagnostics('vis:refreshed', session);
+          if (session?.user) {
+            setUser(session.user);
+            await loadProfile(session.user.id);
+          } else {
+            setUser(null);
+            setProfile(null);
+          }
+        } catch (e) {
+          console.error('❌ Excepción refrescando sesión en visibilidad:', e);
+        } finally {
+          setAuthRefreshing(false);
+        }
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  const clearSession = () => {
+    setUser(null);
+    setProfile(null);
+    // Evitar borrar todo localStorage para no afectar otras pestañas/sesiones
+    try {
+      localStorage.removeItem('article_draft');
+      localStorage.removeItem('article_draft_timestamp');
+      logAuthDiagnostics('clearSession:after');
+    } catch (e) {
+      console.warn('No se pudo limpiar llaves locales de borrador', e);
+    }
+  };
+
+  const handleAuthError = (error: any) => {
+    if (error?.message?.includes('Invalid Refresh Token') ||
+        error?.message?.includes('Refresh Token Not Found') ||
+        error?.message?.includes('JWT expired')) {
+      console.warn('⚠️ Problema con token, intentando refrescar sesión');
+      // Intentar refrescar la sesión una vez
+      setAuthRefreshing(true);
+      supabase.auth.refreshSession()
+        .then(({ data, error: refreshError }) => {
+          if (refreshError) {
+            console.error('❌ Error al refrescar sesión:', refreshError);
+            clearSession();
+          } else if (data?.session?.user) {
+            console.log('✅ Sesión refrescada exitosamente');
+            setUser(data.session.user);
+          } else {
+            console.warn('⚠️ No se pudo refrescar sesión');
+            clearSession();
+          }
+        })
+        .finally(() => setAuthRefreshing(false));
+      return true; // Error manejado
+    }
+    return false; // Error no manejado
+  };
+
+  const loadProfile = async (userId: string) => {
+    try {
+      console.log('👤 Cargando perfil del usuario:', userId);
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+      
+      if (error) {
+        console.error('❌ Error al cargar perfil:', error);
+        // Si el error está relacionado con tokens, manejarlo y salir
+        if (handleAuthError(error)) {
+          console.warn('⚠️ Error de autenticación manejado, limpiando sesión');
+          return;
+        }
+        throw error;
+      }
+      
+      if (data) {
+        console.log('✅ Perfil cargado:', { id: data.id, is_admin: data.is_admin });
+        setProfile(data);
+      } else {
+        console.warn('⚠️ No se encontró perfil para el usuario');
+        setProfile(null);
+      }
+    } catch (err) {
+      console.error('❌ Excepción al cargar perfil:', err);
+      setProfile(null);
+    }
+  };
+
+  const signIn = async (email: string, password: string) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        console.error('Sign in error:', error);
+      }
+      return { error };
+    } catch (error) {
+      console.error('Sign in exception:', error);
+      return { error: error as Error };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signUp = async (email: string, password: string, fullName: string) => {
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
+        },
+      });
+      if (error) {
+        console.error('Sign up error:', error);
+      }
+      return { error };
+    } catch (error) {
+      console.error('Sign up exception:', error);
+      return { error: error as Error };
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      console.log('Iniciando cierre de sesión...');
+      loggedOutRef.current = true;
+      try { supabase.auth.stopAutoRefresh(); } catch {}
+      
+      // Cerrar sesión en Supabase
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
+      if (error) {
+        console.error('Error en supabase.auth.signOut():', error);
+        // No lanzamos error, continuamos limpiando estado local
+      } else {
+        console.log('Supabase signOut exitoso');
+      }
+      
+      // Limpiar estado local inmediatamente
+      logAuthDiagnostics('signOut:beforeClear');
+      clearSession();
+      // Eliminar posibles claves de sesión de Supabase en almacenamiento local
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('sb-')) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach((k) => localStorage.removeItem(k));
+        // Y también en sessionStorage por si el proveedor cambió de storage
+        const sKeys: string[] = [];
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const key = sessionStorage.key(i);
+          if (key && key.startsWith('sb-')) {
+            sKeys.push(key);
+          }
+        }
+        sKeys.forEach((k) => sessionStorage.removeItem(k));
+        logAuthDiagnostics('signOut:afterClear');
+        console.log('Claves sb-* eliminadas del localStorage:', keysToRemove.length);
+      } catch (e) {
+        console.warn('No se pudieron eliminar claves sb-* de localStorage', e);
+      }
+      
+      console.log('Estado local limpiado, sesión cerrada exitosamente');
+    } catch (error) {
+      console.error('Excepción en signOut:', error);
+      // Limpiar estado local incluso si hay error
+      clearSession();
+      console.log('Estado local limpiado a pesar del error');
+    }
+  };
+
+  const value = {
+    user,
+    profile,
+    loading,
+    isAdmin: profile?.is_admin ?? false,
+    authRefreshing,
+    signIn,
+    signUp,
+    signOut,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}

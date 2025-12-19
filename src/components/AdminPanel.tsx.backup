@@ -1,0 +1,376 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Plus, Edit, RefreshCw, AlertCircle, Settings } from 'lucide-react';
+import { supabase, Article, Category } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import AdsManager from './AdsManager';
+import ArticleEditor from './ArticleEditor';
+
+// Claves de borrador en localStorage (deben coincidir con ArticleEditor)
+const DRAFT_STORAGE_KEY = 'article_draft';
+const DRAFT_TIMESTAMP_KEY = 'article_draft_timestamp';
+
+export default function AdminPanel({ onClose }: { onClose?: () => void }) {
+  const { user } = useAuth();
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [showArticleEditor, setShowArticleEditor] = useState<boolean>(false);
+  const [editingArticle, setEditingArticle] = useState<Article | null>(null);
+  const [showAdsManager, setShowAdsManager] = useState<boolean>(false);
+
+  // Borrador local
+  const [localDraft, setLocalDraft] = useState<null | {
+    title: string;
+    subtitle: string;
+    content: string;
+    excerpt: string;
+    category_id: string;
+    image_url: string;
+    is_featured: boolean;
+    published_at: string | null;
+  }>(null);
+  const [localDraftSavedAt, setLocalDraftSavedAt] = useState<Date | null>(null);
+
+  // Refresca el estado del borrador desde localStorage
+  const refreshLocalDraft = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+      const ts = localStorage.getItem(DRAFT_TIMESTAMP_KEY);
+      if (raw && ts) {
+        setLocalDraft(JSON.parse(raw));
+        setLocalDraftSavedAt(new Date(ts));
+      } else {
+        setLocalDraft(null);
+        setLocalDraftSavedAt(null);
+      }
+    } catch (e) {
+      console.error('Error leyendo borrador local:', e);
+    }
+  }, []);
+
+  // Descarta el borrador local
+  const discardLocalDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+      localStorage.removeItem(DRAFT_TIMESTAMP_KEY);
+      refreshLocalDraft();
+    } catch (e) {
+      console.error('Error descartando borrador local:', e);
+    }
+  };
+
+  // Carga categorías con reintento básico
+  const loadCategories = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name');
+
+      if (error) {
+        console.error('Error cargando categorías:', error);
+        if (error.message?.includes('JWT') || error.message?.includes('token')) {
+          await supabase.auth.refreshSession().catch(() => {});
+          const { data: retryData, error: retryError } = await supabase
+            .from('categories')
+            .select('*')
+            .order('name');
+          if (!retryError && retryData) {
+            setCategories(retryData);
+            return;
+          }
+        }
+        setLoadError(`Error al cargar categorías: ${error.message || 'desconocido'}`);
+        return;
+      }
+      setCategories(data || []);
+    } catch (e: any) {
+      console.error('Excepción al cargar categorías:', e);
+      setLoadError(`Excepción al cargar categorías: ${e?.message || String(e)}`);
+    }
+  }, []);
+
+  // Carga artículos en dos pasos: artículos y luego categorías relacionadas
+  const loadArticles = useCallback(async () => {
+    try {
+      // Refrescar sesión antes de la operación por si volvió del fondo
+      await supabase.auth.refreshSession().catch(() => {});
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout cargando artículos (10s)')), 10000));
+
+      const query = supabase
+        .from('articles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      const result: any = await Promise.race([query, timeout]);
+      const data = result?.data ?? result;
+      const error = result?.error ?? null;
+
+      if (error) {
+        console.error('Error cargando artículos:', error);
+        // Reintento si es un error de JWT/token
+        if (error.message?.includes('JWT') || error.message?.includes('token')) {
+          await supabase.auth.refreshSession().catch(() => {});
+          const retry = await supabase
+            .from('articles')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (!retry.error && retry.data) {
+            // Mapear categorías en reintento también
+            const ids = Array.from(new Set((retry.data as any[]).map(a => a.category_id).filter(Boolean)));
+            let catsMap = new Map<string, Category>();
+            if (ids.length > 0) {
+              const { data: cats } = await supabase.from('categories').select('*').in('id', ids);
+              if (cats) catsMap = new Map(cats.map(c => [c.id, c]));
+            }
+            const merged = (retry.data as any[]).map(a => ({ ...a, category: a.category_id ? catsMap.get(a.category_id) : undefined }));
+            setArticles(merged as any);
+            return;
+          }
+        }
+        // Fallback REST
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token ?? '';
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/articles?select=*&order=created_at.desc`;
+        try {
+          const res = await Promise.race([
+            fetch(url, { headers: { Authorization: `Bearer ${token}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY } }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout fallback fetch (8s)')), 8000)),
+          ]);
+          const ok = (res as Response).ok;
+          if (ok) {
+            const json = await (res as Response).json();
+            if (Array.isArray(json)) {
+              // Categorías para fallback
+              const ids = Array.from(new Set(json.map((a: any) => a.category_id).filter(Boolean)));
+              let catsMap = new Map<string, Category>();
+              if (ids.length > 0) {
+                const { data: cats } = await supabase.from('categories').select('*').in('id', ids);
+                if (cats) catsMap = new Map(cats.map(c => [c.id, c]));
+              }
+              const merged = (json as any[]).map(a => ({ ...a, category: a.category_id ? catsMap.get(a.category_id) : undefined }));
+              setArticles(merged as any);
+              setLoadError(null);
+              return;
+            }
+          } else {
+            console.error('Fallback fetch status:', (res as Response).status);
+          }
+        } catch (fe: any) {
+          console.error('Fallback fetch exception:', fe?.message || fe);
+        }
+        setLoadError(`Error al cargar artículos: ${error.message || 'desconocido'}`);
+        return;
+      }
+
+      // Paso 2: cargar categorías y fusionar
+      const ids = Array.from(new Set((data as any[]).map(a => a.category_id).filter(Boolean)));
+      let catsMap = new Map<string, Category>();
+      if (ids.length > 0) {
+        const { data: cats } = await supabase.from('categories').select('*').in('id', ids);
+        if (cats) catsMap = new Map(cats.map(c => [c.id, c]));
+      }
+      const merged = (data as any[]).map(a => ({ ...a, category: a.category_id ? catsMap.get(a.category_id) : undefined }));
+      setArticles(merged as any);
+    } catch (e: any) {
+      console.error('Excepción cargando artículos:', e);
+      setLoadError(`Excepción cargando artículos: ${e?.message || String(e)}`);
+    }
+  }, []);
+
+  // Carga global (artículos + categorías) con timeout maestro
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      await supabase.auth.refreshSession().catch(() => {});
+      const masterTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout global (12s)')), 12000));
+      await Promise.race([
+        (async () => {
+          await loadArticles();
+          await loadCategories();
+        })(),
+        masterTimeout,
+      ]);
+    } catch (e: any) {
+      console.error('Error en loadData:', e);
+      setLoadError(`Error al cargar datos: ${e?.message || String(e)}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [loadArticles, loadCategories]);
+
+  // Efectos iniciales
+  useEffect(() => {
+    loadData();
+    refreshLocalDraft();
+
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (e.key === DRAFT_STORAGE_KEY || e.key === DRAFT_TIMESTAMP_KEY) {
+        refreshLocalDraft();
+      }
+    };
+    window.addEventListener('storage', onStorage);
+
+    const onVisibility = async () => {
+      if (document.visibilityState === 'visible') {
+        await supabase.auth.refreshSession().catch(() => {});
+        loadData();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Handlers de UI
+  const handleNewArticle = () => {
+    setEditingArticle(null);
+    setShowArticleEditor(true);
+  };
+
+  const handleEditArticle = (article: Article) => {
+    setEditingArticle(article);
+    setShowArticleEditor(true);
+  };
+
+  const handleEditorClose = () => {
+    setShowArticleEditor(false);
+  };
+
+  const handleEditorSaved = () => {
+    setShowArticleEditor(false);
+    // Tras guardar, recargar datos y actualizar borrador local
+    loadData();
+    refreshLocalDraft();
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold text-gray-900">Panel de Administración</h1>
+        <div className="flex items-center gap-2">
+          <button
+            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded"
+            onClick={handleNewArticle}
+          >
+            <Plus size={18} /> Nuevo artículo
+          </button>
+          <button
+            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-900 text-white px-3 py-2 rounded"
+            onClick={() => setShowAdsManager((s) => !s)}
+            title="Gestionar anuncios"
+          >
+            <Settings size={18} /> Ads
+          </button>
+          <button
+            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-3 py-2 rounded"
+            onClick={loadData}
+          >
+            <RefreshCw size={18} /> Reintentar
+          </button>
+        </div>
+      </div>
+
+      {loadError && (
+        <div className="flex items-center gap-2 bg-red-100 text-red-800 px-4 py-3 rounded mb-4">
+          <AlertCircle size={18} />
+          <span>{loadError}</span>
+          <button
+            className="ml-auto bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
+            onClick={loadData}
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      {localDraft && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-semibold text-yellow-800">Borrador local encontrado</p>
+              {localDraftSavedAt && (
+                <p className="text-sm text-yellow-700">Guardado: {localDraftSavedAt.toLocaleString()}</p>
+              )}
+              <p className="text-sm text-yellow-700 mt-2">{localDraft.title || '(Sin título)'}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded"
+                onClick={() => {
+                  setEditingArticle(null);
+                  setShowArticleEditor(true);
+                }}
+              >
+                Continuar edición
+              </button>
+              <button
+                className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-3 py-1 rounded"
+                onClick={discardLocalDraft}
+              >
+                Descartar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAdsManager && (
+        <div className="mb-8">
+          <AdsManager />
+        </div>
+      )}
+
+      <div className="bg-white rounded shadow p-4">
+        <h2 className="text-xl font-semibold mb-4">Artículos</h2>
+        {loading ? (
+          <div className="text-gray-600">Cargando...</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {articles.map((article) => (
+              <div key={article.id} className="border rounded p-4">
+                <h3 className="font-bold text-gray-900 mb-2">{article.title}</h3>
+                {article.category && (
+                  <span className="inline-block text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">
+                    {article.category.name}
+                  </span>
+                )}
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded"
+                    onClick={() => handleEditArticle(article)}
+                  >
+                    <Edit size={16} /> Editar
+                  </button>
+                </div>
+              </div>
+            ))}
+            {articles.length === 0 && (
+              <p className="text-gray-600">No hay artículos disponibles.</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {showArticleEditor && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded shadow-lg w-full max-w-5xl max-h-[90vh] overflow-auto">
+            <ArticleEditor
+              onClose={handleEditorClose}
+              onSave={handleEditorSaved}
+              editingArticle={editingArticle}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

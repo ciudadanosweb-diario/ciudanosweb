@@ -49,8 +49,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    // 🔄 LISTENER PARA CAMBIO DE PESTAÑA/VENTANA
+    // Detectar cuando el usuario vuelve a la pestaña y refrescar sesión
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        console.log('👁️ Pestaña visible nuevamente, verificando sesión...');
+        
+        try {
+          const { data: { session }, error } = await supabase.auth.getSession();
+          
+          if (error) {
+            console.error('❌ Error al verificar sesión:', error);
+            return;
+          }
+          
+          if (!session) {
+            console.warn('⚠️ No hay sesión activa después de cambiar de pestaña');
+            setUser(null);
+            setProfile(null);
+            return;
+          }
+
+          // Verificar si el token necesita refrescarse
+          const expiresAt = session.expires_at;
+          const now = Math.floor(Date.now() / 1000);
+          const timeToExpire = expiresAt ? expiresAt - now : Infinity;
+          
+          console.log(`⏱️ Token expira en ${Math.floor(timeToExpire / 60)} minutos`);
+          
+          // Si expira en menos de 10 minutos, refrescar
+          if (timeToExpire < 600) {
+            console.log('🔄 Refrescando sesión automáticamente...');
+            const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+            
+            if (refreshError) {
+              console.error('❌ Error al refrescar sesión:', refreshError);
+            } else if (refreshData.session) {
+              console.log('✅ Sesión refrescada exitosamente');
+              setUser(refreshData.session.user);
+              await loadProfile(refreshData.session.user.id);
+            }
+          } else {
+            console.log('✅ Sesión válida, no requiere refresh');
+          }
+        } catch (error) {
+          console.error('❌ Error al verificar sesión al volver a pestaña:', error);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 

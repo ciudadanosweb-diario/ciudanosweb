@@ -1,6 +1,7 @@
 import { Clock, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Article } from '../lib/supabase';
+import { getCategoryById } from '../lib/categories';
 
 type ArticleCardProps = {
   article: Article;
@@ -9,6 +10,7 @@ type ArticleCardProps = {
 
 export default function ArticleCard({ article, onClick }: ArticleCardProps) {
   const navigate = useNavigate();
+  const category = article.category_id ? getCategoryById(article.category_id) : null;
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('es-ES', {
@@ -35,12 +37,11 @@ export default function ArticleCard({ article, onClick }: ArticleCardProps) {
             alt={article.title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
-          {article.category && (
+          {category && (
             <span
-              className="absolute top-3 left-3 px-3 py-1 rounded-full text-white text-xs font-semibold"
-              style={{ backgroundColor: article.category.color }}
+              className="absolute top-3 left-3 px-3 py-1 rounded-full bg-teal-600 text-white text-xs font-semibold"
             >
-              {article.category.name}
+              {category.name}
             </span>
           )}
         </div>

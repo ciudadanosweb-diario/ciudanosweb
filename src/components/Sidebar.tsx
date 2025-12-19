@@ -18,7 +18,7 @@ export default function Sidebar() {
   const loadMostRead = async () => {
     const { data } = await supabase
       .from('articles')
-      .select('*, category:categories(*)')
+      .select('*')
       .not('published_at', 'is', null)
       .order('view_count', { ascending: false })
       .limit(5);

@@ -37,7 +37,7 @@ function App() {
   const loadArticles = async () => {
     let query = supabase
       .from('articles')
-      .select('*, category:categories(*)')
+      .select('*')
       .not('published_at', 'is', null)
       .order('published_at', { ascending: false });
 

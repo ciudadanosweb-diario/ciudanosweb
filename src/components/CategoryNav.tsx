@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { supabase, Category } from '../lib/supabase';
+import { useState } from 'react';
+import { getAllCategories, LocalCategory } from '../lib/categories';
 
 type CategoryNavProps = {
   selectedCategory: string | null;
@@ -7,19 +7,7 @@ type CategoryNavProps = {
 };
 
 export default function CategoryNav({ selectedCategory, onSelectCategory }: CategoryNavProps) {
-  const [categories, setCategories] = useState<Category[]>([]);
-
-  useEffect(() => {
-    loadCategories();
-  }, []);
-
-  const loadCategories = async () => {
-    const { data } = await supabase
-      .from('categories')
-      .select('*')
-      .order('name');
-    if (data) setCategories(data);
-  };
+  const [categories] = useState<LocalCategory[]>(getAllCategories());
 
   return (
     <nav className="bg-white shadow-md border-b-4 border-orange-500">
@@ -41,12 +29,9 @@ export default function CategoryNav({ selectedCategory, onSelectCategory }: Cate
               onClick={() => onSelectCategory(category.id)}
               className={`px-4 py-2 rounded-lg whitespace-nowrap font-medium transition-colors ${
                 selectedCategory === category.id
-                  ? 'text-white'
-                  : 'bg-gray-100 text-red-600 hover:bg-gray-200'
+                  ? 'bg-teal-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
-              style={{
-                backgroundColor: selectedCategory === category.id ? category.color : undefined,
-              }}
             >
               {category.name}
             </button>

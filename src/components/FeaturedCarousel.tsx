@@ -17,7 +17,7 @@ export default function FeaturedCarousel() {
   const loadFeaturedArticles = async () => {
     const { data } = await supabase
       .from('articles')
-      .select('*, category:categories(*)')
+      .select('*')
       .eq('is_featured', true)
       .not('published_at', 'is', null)
       .order('published_at', { ascending: false })

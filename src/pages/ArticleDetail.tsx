@@ -5,6 +5,7 @@ import { supabase, Article } from '../lib/supabase';
 import SocialShare from '../components/SocialShare';
 import MDEditor from '@uiw/react-md-editor';
 import '@uiw/react-markdown-preview/markdown.css';
+import { getCategoryById } from '../lib/categories';
 
 export default function ArticleDetail() {
   const { id } = useParams<{ id: string }>();
@@ -12,6 +13,8 @@ export default function ArticleDetail() {
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  const category = article?.category_id ? getCategoryById(article.category_id) : null;
 
   useEffect(() => {
     loadArticle();
@@ -61,7 +64,7 @@ export default function ArticleDetail() {
     try {
       const { data, error: fetchError } = await supabase
         .from('articles')
-        .select('*, category:categories(*)')
+        .select('*')
         .eq('id', id)
         .maybeSingle();
 
@@ -148,12 +151,11 @@ export default function ArticleDetail() {
                 className="w-full h-full object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              {article.category && (
+              {category && (
                 <span
-                  className="absolute bottom-6 left-6 px-4 py-2 rounded-full text-white font-semibold text-sm"
-                  style={{ backgroundColor: article.category.color }}
+                  className="absolute bottom-6 left-6 px-4 py-2 rounded-full bg-teal-600 text-white font-semibold text-sm"
                 >
-                  {article.category.name}
+                  {category.name}
                 </span>
               )}
             </div>
@@ -177,12 +179,11 @@ export default function ArticleDetail() {
                 <Eye className="w-5 h-5" />
                 <span>{article.view_count} vista{article.view_count !== 1 ? 's' : ''}</span>
               </div>
-              {article.category && !article.image_url && (
+              {category && !article.image_url && (
                 <span
-                  className="px-3 py-1 rounded-full text-white text-sm font-semibold"
-                  style={{ backgroundColor: article.category.color }}
+                  className="px-3 py-1 rounded-full bg-teal-600 text-white text-sm font-semibold"
                 >
-                  {article.category.name}
+                  {category.name}
                 </span>
               )}
               <div className="ml-auto">

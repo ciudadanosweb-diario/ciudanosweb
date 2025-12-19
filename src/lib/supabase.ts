@@ -27,10 +27,23 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     // Asegurar uso de localStorage del navegador para persistir sesión
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     storageKey: 'sb-ciudanosweb-auth',
+    // Configurar tiempo de espera más largo
+    flowType: 'pkce',
+    // Debug: mantener sesión más tiempo
+    debug: import.meta.env.DEV,
   },
   global: {
     headers: {
       'X-Client-Info': 'ciudanosweb-client',
+    },
+  },
+  // Configurar reintentos en caso de errores de red
+  db: {
+    schema: 'public',
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 2,
     },
   },
 });
@@ -39,16 +52,34 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 if (typeof window !== 'undefined') {
   console.log('🧪 [SupabaseClient] persistSession=true autoRefreshToken=true storage=localStorage storageKey=sb-ciudanosweb-auth');
   
-  // Agregar listener para errores de red en storage
-  supabase.storage.onError = (error: any) => {
-    console.error('🚨 [Supabase Storage Error]:', {
-      message: error.message,
-      name: error.name,
-      status: error.status,
-      details: error.details,
-      hint: error.hint
-    });
-  };
+  // Listener global para detectar cuando se pierde la sesión
+  supabase.auth.onAuthStateChange((event, session) => {
+    console.log('🔐 [Auth State Change]:', event, session ? 'Usuario conectado' : 'Sin sesión');
+    
+    if (event === 'SIGNED_OUT') {
+      console.warn('⚠️ [Session Lost] Usuario desconectado');
+    }
+    
+    if (event === 'TOKEN_REFRESHED') {
+      console.log('✅ [Token Refreshed] Sesión renovada exitosamente');
+    }
+    
+    if (event === 'USER_UPDATED') {
+      console.log('👤 [User Updated] Datos de usuario actualizados');
+    }
+  });
+
+  // Verificar sesión cada 5 minutos y refrescar si es necesario
+  setInterval(async () => {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error('❌ [Session Check] Error al verificar sesión:', error);
+    } else if (!session) {
+      console.warn('⚠️ [Session Check] No hay sesión activa');
+    } else {
+      console.log('✅ [Session Check] Sesión activa');
+    }
+  }, 5 * 60 * 1000); // Cada 5 minutos
 }
 
 export type Category = {

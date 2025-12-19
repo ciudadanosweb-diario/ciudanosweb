@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Upload, Save, Loader, Image as ImageIcon } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import MDEditor from '@uiw/react-md-editor';
 import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
-import { supabase, Article, Category } from '../lib/supabase';
+import { supabase, Article } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import ImageGallery from './ImageGallery';
+import { getAllCategories, LocalCategory } from '../lib/categories';
 
 type ArticleEditorProps = {
   onClose: () => void;
@@ -27,11 +28,14 @@ type ArticleForm = {
 
 export default function ArticleEditor({ onClose, onSave, editingArticle }: ArticleEditorProps) {
   const { user } = useAuth();
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories] = useState<LocalCategory[]>(getAllCategories());
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imagePreview, setImagePreview] = useState<string>('');
   const [showGallery, setShowGallery] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<string>('');
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedDataRef = useRef<string>('');
 
   const [formData, setFormData] = useState<ArticleForm>({
     title: '',
@@ -44,8 +48,114 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
     published_at: new Date().toISOString(),
   });
 
+  // Generar clave única para localStorage
+  const getStorageKey = () => {
+    return editingArticle ? `article-draft-${editingArticle.id}` : 'article-draft-new';
+  };
+
+  // Guardar en localStorage
+  const saveToLocalStorage = useCallback(() => {
+    try {
+      localStorage.setItem(getStorageKey(), JSON.stringify(formData));
+      console.log('💾 Guardado en localStorage');
+    } catch (error) {
+      console.error('Error al guardar en localStorage:', error);
+    }
+  }, [formData, editingArticle]);
+
+  // Restaurar desde localStorage
+  const restoreFromLocalStorage = useCallback(() => {
+    try {
+      const saved = localStorage.getItem(getStorageKey());
+      if (saved && !editingArticle) {
+        const parsed = JSON.parse(saved);
+        if (parsed.title || parsed.content) {
+          const shouldRestore = window.confirm(
+            '¿Deseas restaurar el borrador guardado automáticamente?'
+          );
+          if (shouldRestore) {
+            setFormData(parsed);
+            setImagePreview(parsed.image_url || '');
+            console.log('🔄 Restaurado desde localStorage');
+          } else {
+            localStorage.removeItem(getStorageKey());
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error al restaurar desde localStorage:', error);
+    }
+  }, [editingArticle]);
+
+  // Limpiar localStorage después de guardar exitosamente
+  const clearLocalStorage = useCallback(() => {
+    try {
+      localStorage.removeItem(getStorageKey());
+      console.log('🗑️ localStorage limpiado');
+    } catch (error) {
+      console.error('Error al limpiar localStorage:', error);
+    }
+  }, [editingArticle]);
+
+  // Auto-guardado con debounce
+  const autoSave = useCallback(() => {
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      const currentData = JSON.stringify(formData);
+      if (currentData !== lastSavedDataRef.current) {
+        saveToLocalStorage();
+        lastSavedDataRef.current = currentData;
+        setAutoSaveStatus('Guardado automáticamente');
+        setTimeout(() => setAutoSaveStatus(''), 2000);
+      }
+    }, 2000); // Espera 2 segundos después del último cambio
+  }, [formData, saveToLocalStorage]);
+
+  // Efecto para auto-guardar cuando cambia el formulario
   useEffect(() => {
-    loadCategories();
+    if (formData.title || formData.content) {
+      autoSave();
+    }
+  }, [formData, autoSave]);
+
+  // Guardar antes de cerrar/cambiar ventana
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        saveToLocalStorage();
+        console.log('👁️ Ventana oculta - guardado automático');
+      }
+    };
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (formData.title || formData.content) {
+        saveToLocalStorage();
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [formData, saveToLocalStorage]);
+
+  // Categorías cargadas desde archivo local - no requiere consulta a Supabase
+  console.log('📁 Usando categorías locales:', categories.length);
+
+  useEffect(() => {
+    // Intentar restaurar borrador
+    restoreFromLocalStorage();
     
     if (editingArticle) {
       setFormData({
@@ -59,34 +169,35 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
         published_at: editingArticle.published_at || null,
       });
       setImagePreview(editingArticle.image_url || '');
+      lastSavedDataRef.current = JSON.stringify({
+        title: editingArticle.title,
+        subtitle: editingArticle.subtitle || '',
+        content: editingArticle.content,
+        excerpt: editingArticle.excerpt || '',
+        category_id: editingArticle.category_id || '',
+        image_url: editingArticle.image_url || '',
+        is_featured: editingArticle.is_featured || false,
+        published_at: editingArticle.published_at || null,
+      });
     }
-  }, [editingArticle]);
-
-  const loadCategories = async () => {
-    try {
-      console.log('🔍 Cargando categorías...');
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('name');
-      
-      if (error) {
-        console.error('❌ Error al cargar categorías:', error);
-        throw error;
-      }
-      
-      console.log('✅ Categorías cargadas:', data?.length || 0, data);
-      setCategories(data || []);
-    } catch (error: any) {
-      console.error('❌ Excepción al cargar categorías:', error);
-      alert('Error al cargar categorías: ' + error.message);
-    }
-  };
+  }, [editingArticle, restoreFromLocalStorage]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) {
       console.log('📁 No se seleccionó ningún archivo');
+      return;
+    }
+
+    // Validar tipo de archivo
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor selecciona un archivo de imagen válido');
+      return;
+    }
+
+    // Validar tamaño (máximo 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('El archivo es demasiado grande. Tamaño máximo: 10MB');
       return;
     }
 
@@ -97,10 +208,13 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
       lastModified: new Date(file.lastModified).toISOString()
     });
 
+    // Resetear el input para permitir seleccionar el mismo archivo nuevamente
+    e.target.value = '';
+
     try {
       setUploading(true);
 
-      // Comprimir imagen
+      // Comprimir imagen con timeout
       const options = {
         maxSizeMB: 0.5,
         maxWidthOrHeight: 1200,
@@ -109,6 +223,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
 
       console.log('🗜️ Comenzando compresión de imagen...');
       const compressedFile = await imageCompression(file, options);
+      
       console.log('✅ Imagen comprimida:', {
         originalSize: file.size,
         compressedSize: compressedFile.size,
@@ -118,30 +233,59 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
       const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       console.log('📝 Nombre de archivo generado:', fileName);
 
-      // Verificar autenticación
+      // VERIFICAR SESIÓN PRIMERO
+      console.log('🔐 Verificando sesión...');
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
       if (sessionError) {
-        console.error('❌ Error al obtener sesión:', sessionError);
-        throw new Error('Error de autenticación: ' + sessionError.message);
+        console.error('❌ Error de sesión:', sessionError);
+        throw new Error('Error de autenticación. Vuelve a iniciar sesión.');
       }
+      
       if (!session) {
         console.error('❌ No hay sesión activa');
-        throw new Error('No hay sesión activa');
+        throw new Error('No estás autenticado. Inicia sesión nuevamente.');
       }
-      console.log('🔐 Sesión verificada, usuario:', session.user.id);
+      
+      console.log('✅ Sesión activa:', session.user.email);
 
-      // Subir a Supabase Storage
+      // Subir con timeout
       console.log('☁️ Subiendo a bucket article-images...');
-      const { data, error } = await supabase.storage
-        .from('article-images')
-        .upload(fileName, compressedFile, {
-          contentType: compressedFile.type,
-          upsert: false,
+      console.log('📊 Detalles de subida:', {
+        bucket: 'article-images',
+        fileName: fileName,
+        fileSize: compressedFile.size,
+        fileType: compressedFile.type
+      });
+
+      const uploadWithTimeout = async () => {
+        const uploadPromise = supabase.storage
+          .from('article-images')
+          .upload(fileName, compressedFile, {
+            contentType: compressedFile.type,
+            upsert: false,
+          });
+
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('⏱️ Timeout: La subida tardó más de 30 segundos')), 30000);
         });
 
+        return Promise.race([uploadPromise, timeoutPromise]);
+      };
+
+      console.log('⏳ Esperando respuesta de Supabase...');
+      const result = await uploadWithTimeout();
+      console.log('📦 Respuesta recibida:', result);
+
+      const { data, error } = result as any;
+
       if (error) {
-        console.error('❌ Error en subida a Supabase:', error);
-        throw error;
+        console.error('❌ Error en subida:', error);
+        throw new Error(error.message || 'Error al subir imagen');
+      }
+
+      if (!data) {
+        throw new Error('No se recibió data de la subida');
       }
 
       console.log('✅ Archivo subido exitosamente:', data);
@@ -158,6 +302,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
       setImagePreview(publicUrl);
       
       console.log('🎉 Subida completada exitosamente');
+      
     } catch (error: any) {
       console.error('💥 Error completo en subida de imagen:', {
         message: error.message,
@@ -166,9 +311,15 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
         code: error.code,
         details: error.details
       });
-      alert('Error al subir imagen: ' + error.message);
+      
+      // Mostrar mensaje de error amigable
+      const errorMessage = error.message || 'Error desconocido al subir imagen';
+      alert(`Error al subir imagen: ${errorMessage}\n\nIntenta nuevamente o contacta al administrador si el problema persiste.`);
+      
     } finally {
+      // SIEMPRE desbloquear el botón, sin importar qué suceda
       setUploading(false);
+      console.log('🔓 Botón de subida desbloqueado');
     }
   };
 
@@ -222,6 +373,9 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
 
       if (error) throw error;
 
+      // Limpiar localStorage después de guardar exitosamente
+      clearLocalStorage();
+
       alert(editingArticle ? 'Artículo actualizado exitosamente' : 'Artículo publicado exitosamente');
       onSave();
       onClose();
@@ -238,9 +392,16 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-white rounded-lg max-w-4xl w-full my-8">
         <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white z-10 rounded-t-lg">
-          <h2 className="text-2xl font-bold">
-            {editingArticle ? 'Editar Artículo' : 'Nuevo Artículo'}
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-bold">
+              {editingArticle ? 'Editar Artículo' : 'Nuevo Artículo'}
+            </h2>
+            {autoSaveStatus && (
+              <span className="text-sm text-green-600 animate-pulse">
+                {autoSaveStatus}
+              </span>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
@@ -355,13 +516,27 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Contenido * (Markdown)
             </label>
-            <div data-color-mode="light">
+            <div 
+              data-color-mode="light"
+              onPaste={() => {
+                // Guardar inmediatamente después de pegar
+                setTimeout(() => {
+                  saveToLocalStorage();
+                  console.log('📋 Contenido pegado - guardado automático');
+                }, 100);
+              }}
+              onBlur={() => {
+                // Guardar al perder el foco
+                saveToLocalStorage();
+                console.log('👁️ Editor perdió el foco - guardado automático');
+              }}
+            >
               <MDEditor
                 value={formData.content}
                 onChange={(value) => setFormData({ ...formData, content: value || '' })}
                 preview="edit"
                 hideToolbar={false}
-                visibleDragBar={false}
+                visibleDragbar={false}
                 height={400}
               />
             </div>

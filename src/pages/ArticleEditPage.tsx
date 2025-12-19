@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { X, Upload, Save, Loader, Image as ImageIcon, ArrowLeft } from 'lucide-react';
+import { Upload, Save, Loader, Image as ImageIcon, ArrowLeft } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import MDEditor from '@uiw/react-md-editor';
 import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
-import { supabase, Article, Category } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import ImageGallery from '../components/ImageGallery';
+import { getAllCategories, LocalCategory } from '../lib/categories';
 
 type ArticleForm = {
   title: string;
@@ -24,7 +25,7 @@ export default function ArticleEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories] = useState<LocalCategory[]>(getAllCategories());
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -42,42 +43,54 @@ export default function ArticleEditPage() {
     published_at: new Date().toISOString(),
   });
 
+  // Categorías cargadas desde archivo local - no requiere consulta a Supabase
+  console.log('📁 Usando categorías locales:', categories.length);
+
+  // 🔄 Verificar sesión cuando la página recibe foco (después de cambiar de pestaña)
   useEffect(() => {
-    if (!user || !isAdmin) {
-      navigate('/admin');
-      return;
-    }
-
-    loadCategories();
-    if (id && id !== 'new') {
-      loadArticle();
-    } else {
-      setLoading(false);
-    }
-  }, [user, isAdmin, id, navigate]);
-
-  const loadCategories = async () => {
-    try {
-      console.log('🔍 Cargando categorías...');
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('name');
-
-      if (error) {
-        console.error('❌ Error al cargar categorías:', error);
-        throw error;
+    const handleFocus = async () => {
+      console.log('👁️ Ventana enfocada, verificando sesión...');
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('❌ Error al verificar sesión:', error);
+          return;
+        }
+        
+        if (!session) {
+          console.warn('⚠️ Sesión perdida, redirigiendo al login...');
+          alert('Tu sesión ha expirado. Por favor, vuelve a iniciar sesión.');
+          navigate('/admin');
+          return;
+        }
+        
+        // Verificar si el token necesita refrescarse
+        const expiresAt = session.expires_at;
+        const now = Math.floor(Date.now() / 1000);
+        const timeToExpire = expiresAt ? expiresAt - now : Infinity;
+        
+        if (timeToExpire < 600) { // Menos de 10 minutos
+          console.log('🔄 Token próximo a expirar, refrescando preventivamente...');
+          const { error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError) {
+            console.error('❌ Error al refrescar sesión:', refreshError);
+          } else {
+            console.log('✅ Sesión refrescada preventivamente');
+          }
+        } else {
+          console.log(`✅ Sesión válida (${Math.floor(timeToExpire / 60)} minutos restantes)`);
+        }
+      } catch (error) {
+        console.error('❌ Error al verificar sesión:', error);
       }
+    };
 
-      console.log('✅ Categorías cargadas:', data?.length || 0, data);
-      setCategories(data || []);
-    } catch (error: any) {
-      console.error('❌ Excepción al cargar categorías:', error);
-      alert('Error al cargar categorías: ' + error.message);
-    }
-  };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [navigate]);
 
-  const loadArticle = async () => {
+  const loadArticle = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('articles')
@@ -107,12 +120,37 @@ export default function ArticleEditPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, navigate]);
+
+  useEffect(() => {
+    if (!user || !isAdmin) {
+      navigate('/admin');
+      return;
+    }
+
+    if (id && id !== 'new') {
+      loadArticle();
+    } else {
+      setLoading(false);
+    }
+  }, [user, isAdmin, id, loadArticle, navigate]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) {
       console.log('📁 No se seleccionó ningún archivo');
+      return;
+    }
+
+    // Validar tipo de archivo
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor selecciona un archivo de imagen válido');
+      return;
+    }
+
+    // Validar tamaño (máximo 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('El archivo es demasiado grande. Tamaño máximo: 10MB');
       return;
     }
 
@@ -123,10 +161,13 @@ export default function ArticleEditPage() {
       lastModified: new Date(file.lastModified).toISOString()
     });
 
+    // Resetear el input para permitir seleccionar el mismo archivo nuevamente
+    e.target.value = '';
+
     try {
       setUploading(true);
 
-      // Comprimir imagen
+      // Comprimir imagen con timeout
       const options = {
         maxSizeMB: 0.5,
         maxWidthOrHeight: 1200,
@@ -135,6 +176,7 @@ export default function ArticleEditPage() {
 
       console.log('🗜️ Comenzando compresión de imagen...');
       const compressedFile = await imageCompression(file, options);
+      
       console.log('✅ Imagen comprimida:', {
         originalSize: file.size,
         compressedSize: compressedFile.size,
@@ -144,30 +186,60 @@ export default function ArticleEditPage() {
       const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       console.log('📝 Nombre de archivo generado:', fileName);
 
-      // Verificar autenticación
+      // VERIFICAR SESIÓN PRIMERO
+      console.log('🔐 Verificando sesión...');
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
       if (sessionError) {
-        console.error('❌ Error al obtener sesión:', sessionError);
-        throw new Error('Error de autenticación: ' + sessionError.message);
+        console.error('❌ Error de sesión:', sessionError);
+        throw new Error('Error de autenticación. Vuelve a iniciar sesión.');
       }
+      
       if (!session) {
         console.error('❌ No hay sesión activa');
-        throw new Error('No hay sesión activa');
+        throw new Error('No estás autenticado. Inicia sesión nuevamente.');
       }
-      console.log('🔐 Sesión verificada, usuario:', session.user.id);
+      
+      console.log('✅ Sesión activa:', session.user.email);
 
-      // Subir a Supabase Storage
+      // Subir con timeout de 30 segundos
       console.log('☁️ Subiendo a bucket article-images...');
-      const { data, error } = await supabase.storage
-        .from('article-images')
-        .upload(fileName, compressedFile, {
-          contentType: compressedFile.type,
-          upsert: false,
+      console.log('📊 Detalles de subida:', {
+        bucket: 'article-images',
+        fileName: fileName,
+        fileSize: compressedFile.size,
+        fileType: compressedFile.type
+      });
+
+      // Crear Promise con timeout
+      const uploadWithTimeout = async () => {
+        const uploadPromise = supabase.storage
+          .from('article-images')
+          .upload(fileName, compressedFile, {
+            contentType: compressedFile.type,
+            upsert: false,
+          });
+
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('⏱️ Timeout: La subida tardó más de 30 segundos')), 30000);
         });
 
+        return Promise.race([uploadPromise, timeoutPromise]);
+      };
+
+      console.log('⏳ Esperando respuesta de Supabase...');
+      const result = await uploadWithTimeout();
+      console.log('📦 Respuesta recibida:', result);
+
+      const { data, error } = result as any;
+
       if (error) {
-        console.error('❌ Error en subida a Supabase:', error);
-        throw error;
+        console.error('❌ Error en subida:', error);
+        throw new Error(error.message || 'Error al subir imagen');
+      }
+
+      if (!data) {
+        throw new Error('No se recibió data de la subida');
       }
 
       console.log('✅ Archivo subido exitosamente:', data);
@@ -184,6 +256,7 @@ export default function ArticleEditPage() {
       setImagePreview(publicUrl);
 
       console.log('🎉 Subida completada exitosamente');
+      
     } catch (error: any) {
       console.error('💥 Error completo en subida de imagen:', {
         message: error.message,
@@ -192,9 +265,15 @@ export default function ArticleEditPage() {
         code: error.code,
         details: error.details
       });
-      alert('Error al subir imagen: ' + error.message);
+      
+      // Mostrar mensaje de error amigable
+      const errorMessage = error.message || 'Error desconocido al subir imagen';
+      alert(`Error al subir imagen: ${errorMessage}\n\nIntenta nuevamente o contacta al administrador si el problema persiste.`);
+      
     } finally {
+      // SIEMPRE desbloquear el botón, sin importar qué suceda
       setUploading(false);
+      console.log('🔓 Botón de subida desbloqueado');
     }
   };
 
@@ -219,7 +298,46 @@ export default function ArticleEditPage() {
 
     try {
       setSaving(true);
+      console.log('💾 Iniciando guardado de artículo...');
 
+      // 🔐 VERIFICAR Y REFRESCAR SESIÓN ANTES DE GUARDAR
+      console.log('🔐 Verificando sesión antes de guardar...');
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('❌ Error al verificar sesión:', sessionError);
+        throw new Error('Error de sesión. Por favor, vuelve a iniciar sesión.');
+      }
+
+      if (!session) {
+        console.error('❌ No hay sesión activa');
+        throw new Error('Sesión expirada. Por favor, vuelve a iniciar sesión.');
+      }
+
+      console.log('✅ Sesión activa confirmada:', session.user.email);
+
+      // Si el token está próximo a expirar (menos de 5 minutos), refrescarlo
+      const expiresAt = session.expires_at;
+      const now = Math.floor(Date.now() / 1000);
+      const timeToExpire = expiresAt ? expiresAt - now : Infinity;
+      
+      if (timeToExpire < 300) { // Menos de 5 minutos
+        console.log('⚠️ Token próximo a expirar, refrescando...');
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (refreshError) {
+          console.error('❌ Error al refrescar sesión:', refreshError);
+          throw new Error('No se pudo refrescar la sesión. Por favor, vuelve a iniciar sesión.');
+        }
+        
+        if (refreshData.session) {
+          console.log('✅ Sesión refrescada exitosamente');
+        }
+      } else {
+        console.log(`✅ Token válido por ${Math.floor(timeToExpire / 60)} minutos más`);
+      }
+
+      // Preparar datos del artículo
       const articleData = {
         title: formData.title,
         subtitle: formData.subtitle,
@@ -232,29 +350,47 @@ export default function ArticleEditPage() {
         author_id: user.id,
       };
 
+      console.log('📝 Guardando artículo en base de datos...');
+
       let error;
       if (id && id !== 'new') {
+        console.log('🔄 Actualizando artículo existente:', id);
         const result = await supabase
           .from('articles')
           .update(articleData)
           .eq('id', id);
         error = result.error;
       } else {
+        console.log('➕ Creando nuevo artículo');
         const result = await supabase
           .from('articles')
           .insert([articleData]);
         error = result.error;
       }
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error de Supabase:', error);
+        throw error;
+      }
 
       console.log('✅ Artículo guardado exitosamente');
+      alert('Artículo guardado correctamente');
       navigate('/admin');
     } catch (error: any) {
       console.error('❌ Error al guardar artículo:', error);
-      alert('Error al guardar artículo: ' + error.message);
+      
+      // Mensaje de error más descriptivo
+      let errorMessage = 'Error desconocido';
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.code) {
+        errorMessage = `Error código: ${error.code}`;
+      }
+      
+      alert(`Error al guardar artículo: ${errorMessage}\n\nSi el problema persiste, intenta cerrar sesión y volver a entrar.`);
     } finally {
       setSaving(false);
+      console.log('🔓 Guardado finalizado');
     }
   };
 
@@ -399,7 +535,7 @@ export default function ArticleEditPage() {
                 onChange={(value) => setFormData({ ...formData, content: value || '' })}
                 preview="edit"
                 hideToolbar={false}
-                visibleDragBar={false}
+                visibleDragbar={false}
                 height={500}
               />
             </div>

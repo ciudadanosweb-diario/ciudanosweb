@@ -5,12 +5,12 @@ import { supabase, Article, Category } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import AdsManager from './AdsManager';
 import CategoryManager from './CategoryManager';
+import { getCategoryById } from '../lib/categories';
 
 export default function AdminPanel({ onClose: _onClose }: { onClose?: () => void }) {
   const { user: _user } = useAuth();
   const navigate = useNavigate();
   const [articles, setArticles] = useState<Article[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +25,7 @@ export default function AdminPanel({ onClose: _onClose }: { onClose?: () => void
     setLoading(true);
     setError(null);
     try {
-      await Promise.all([loadArticles(), loadCategories()]);
+      await loadArticles();
     } catch (err: any) {
       console.error('Error cargando datos:', err);
       setError('Error al cargar datos');
@@ -38,28 +38,13 @@ export default function AdminPanel({ onClose: _onClose }: { onClose?: () => void
     try {
       const { data, error } = await supabase
         .from('articles')
-        .select('*, category:categories(*)')
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       setArticles(data || []);
     } catch (err: any) {
       console.error('Error cargando artículos:', err);
-      throw err;
-    }
-  };
-
-  const loadCategories = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
-      setCategories(data || []);
-    } catch (err: any) {
-      console.error('Error cargando categorías:', err);
       throw err;
     }
   };
@@ -95,7 +80,7 @@ export default function AdminPanel({ onClose: _onClose }: { onClose?: () => void
 
   const getCategoryName = (categoryId: string | undefined) => {
     if (!categoryId) return 'Sin categoría';
-    const category = categories.find(c => c.id === categoryId);
+    const category = getCategoryById(categoryId);
     return category?.name || 'Sin categoría';
   };
 

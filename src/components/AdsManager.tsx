@@ -152,6 +152,14 @@ export default function AdsManager() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    console.log('handleSubmit called with formData:', formData);
+
+    // Validaciones
+    if (!formData.title.trim()) {
+      alert('Por favor completa el campo de título requerido');
+      return;
+    }
+
     if (!formData.image_url) {
       alert('Por favor completa el campo de imagen requerido');
       return;
@@ -162,33 +170,51 @@ export default function AdsManager() {
       return;
     }
 
+    if (!user?.id) {
+      alert('Usuario no autenticado. Por favor inicia sesión.');
+      return;
+    }
+
     const nextPosition = editingAd ? ads.find(a => a.id === editingAd)?.position || 0 : Math.max(...ads.map(a => a.position), -1) + 1;
 
     const adData = {
-      title: formData.title,
-      description: formData.description || null,
+      title: formData.title.trim(),
+      description: formData.description.trim() || null,
       image_url: formData.image_url,
-      link_url: formData.link_url || null,
+      link_url: formData.link_url.trim() || null,
       is_active: formData.is_active,
-      start_date: formData.start_date || null,
-      end_date: formData.end_date || null,
+      start_date: formData.start_date ? new Date(formData.start_date).toISOString() : null,
+      end_date: formData.end_date ? new Date(formData.end_date).toISOString() : null,
       position: nextPosition,
-      created_by: user?.id,
+      created_by: user.id,
     };
+
+    console.log('adData to save:', adData);
 
     try {
       if (editingAd) {
+        console.log('Updating ad with id:', editingAd);
         const { error } = await supabase.from('ads').update(adData).eq('id', editingAd);
-        if (error) throw error;
+        if (error) {
+          console.error('Update error:', error);
+          throw error;
+        }
+        console.log('Ad updated successfully');
       } else {
+        console.log('Inserting new ad');
         const { error } = await supabase.from('ads').insert([adData]);
-        if (error) throw error;
+        if (error) {
+          console.error('Insert error:', error);
+          throw error;
+        }
+        console.log('Ad inserted successfully');
       }
       resetForm();
       loadAds();
+      alert('Publicidad guardada exitosamente');
     } catch (error) {
       console.error('Error al guardar publicidad:', error);
-      alert('Error al guardar la publicidad');
+      alert('Error al guardar la publicidad. Revisa la consola para más detalles.');
     }
   };
 
@@ -289,6 +315,7 @@ export default function AdsManager() {
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+              required
             />
           </div>
 

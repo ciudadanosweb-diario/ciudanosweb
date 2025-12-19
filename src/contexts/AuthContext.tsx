@@ -45,7 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     initializeAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state change:', event, session?.user?.id || 'no user');
       try {
         setUser(session?.user ?? null);
         if (session?.user) {
@@ -68,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setProfile(null);
     // Limpiar cualquier dato de sesión almacenado localmente
-    localStorage.removeItem('supabase.auth.token');
+    localStorage.clear();
   };
 
   const handleAuthError = (error: any) => {
@@ -136,28 +137,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     try {
-      console.log('Cerrando sesión...');
+      console.log('Iniciando cierre de sesión...');
       
       // Cerrar sesión en Supabase
       const { error } = await supabase.auth.signOut();
       if (error) {
-        console.error('Sign out error:', error);
+        console.error('Error en supabase.auth.signOut():', error);
+        // No lanzamos error, continuamos limpiando estado local
+      } else {
+        console.log('Supabase signOut exitoso');
       }
       
-      // Limpiar estado local
-      setUser(null);
-      setProfile(null);
+      // Limpiar estado local inmediatamente
+      clearSession();
       
-      // Limpiar localStorage
-      localStorage.clear();
-      
-      console.log('Sesión cerrada exitosamente');
+      console.log('Estado local limpiado, sesión cerrada exitosamente');
     } catch (error) {
-      console.error('Sign out exception:', error);
+      console.error('Excepción en signOut:', error);
       // Limpiar estado local incluso si hay error
-      setUser(null);
-      setProfile(null);
-      localStorage.clear();
+      clearSession();
+      console.log('Estado local limpiado a pesar del error');
     }
   };
 

@@ -1,4 +1,5 @@
 import { LogOut, Home } from 'lucide-react';
+import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -7,6 +8,9 @@ export default function Header() {
   const navigate = useNavigate();
   const location = useLocation();
   const isAdminPage = location.pathname === '/admin';
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  console.log('Header render - user:', user?.id, 'isSigningOut:', isSigningOut);
   
   const currentDate = new Date().toLocaleDateString('es-ES', {
     weekday: 'long',
@@ -52,17 +56,30 @@ export default function Header() {
                 <span className="hidden sm:inline">Inicio</span>
               </button>
             )}
-            {user && (
+            {user && !isSigningOut && (
               <button
                 onClick={async () => {
-                  await signOut();
-                  // Redirigir a la página principal después de cerrar sesión
-                  navigate('/');
+                  console.log('Botón Salir clickeado, usuario:', user);
+                  setIsSigningOut(true);
+                  try {
+                    await signOut();
+                    console.log('signOut completado, navegando a /');
+                    // Redirigir a la página principal después de cerrar sesión
+                    navigate('/');
+                    console.log('navigate completado');
+                    alert('Sesión cerrada exitosamente');
+                  } catch (error) {
+                    console.error('Error al cerrar sesión:', error);
+                    alert('Error al cerrar sesión');
+                  } finally {
+                    setIsSigningOut(false);
+                  }
                 }}
-                className="flex items-center space-x-1 md:space-x-2 bg-green-600 hover:bg-green-700 px-2 md:px-4 py-1 md:py-2 rounded-lg transition-colors text-white text-xs md:text-sm whitespace-nowrap"
+                disabled={isSigningOut}
+                className="flex items-center space-x-1 md:space-x-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 px-2 md:px-4 py-1 md:py-2 rounded-lg transition-colors text-white text-xs md:text-sm whitespace-nowrap"
               >
                 <LogOut className="w-3 h-3 md:w-4 md:h-4" />
-                <span className="hidden sm:inline">Salir</span>
+                <span className="hidden sm:inline">{isSigningOut ? 'Saliendo...' : 'Salir'}</span>
               </button>
             )}
           </div>

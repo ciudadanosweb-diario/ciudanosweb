@@ -23,30 +23,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Verificar sesión inicial
     const initializeAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) {
-          console.error('Error getting session:', error);
+        console.log('🔐 Iniciando autenticación...');
+        console.log('🌐 Estado de conexión:', navigator.onLine ? 'Online' : 'Offline');
+        
+        if (!navigator.onLine) {
+          console.warn('⚠️ No hay conexión a internet');
           setUser(null);
           setProfile(null);
+          setLoading(false);
+          return;
+        }
+        
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('❌ Error al obtener sesión:', error);
+          setUser(null);
+          setProfile(null);
+        } else if (session?.user) {
+          console.log('✅ Sesión encontrada para usuario:', session.user.id);
+          setUser(session.user);
+          await loadProfile(session.user.id);
         } else {
-          setUser(session?.user ?? null);
-          if (session?.user) {
-            await loadProfile(session.user.id);
-          }
+          console.log('ℹ️ No hay sesión activa');
+          setUser(null);
+          setProfile(null);
         }
       } catch (error) {
-        console.error('Error initializing auth:', error);
+        console.error('❌ Error al inicializar autenticación:', error);
         setUser(null);
         setProfile(null);
       } finally {
         setLoading(false);
+        console.log('✅ Autenticación inicializada');
       }
     };
 
     initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state change:', event, session?.user?.id || 'no user');
+      console.log('🔄 Cambio de estado de autenticación:', event, session?.user?.id || 'sin usuario');
       try {
         setUser(session?.user ?? null);
         if (session?.user) {
@@ -55,14 +71,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(null);
         }
       } catch (error) {
-        console.error('Error in auth state change:', error);
+        console.error('❌ Error en cambio de estado de autenticación:', error);
         // Limpiar estado en caso de error
         setUser(null);
         setProfile(null);
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Listeners de conexión a internet
+    const handleOnline = () => {
+      console.log('🌐 Conexión restaurada');
+      // Intentar refrescar la sesión cuando se recupere la conexión
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          console.log('✅ Sesión restaurada después de reconexión');
+          setUser(session.user);
+          loadProfile(session.user.id);
+        }
+      });
+    };
+
+    const handleOffline = () => {
+      console.warn('⚠️ Conexión perdida');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   const clearSession = () => {
@@ -85,15 +125,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadProfile = async (userId: string) => {
     try {
+      console.log('👤 Cargando perfil del usuario:', userId);
       const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+      
       if (error) {
+        console.error('❌ Error al cargar perfil:', error);
         // Si el error está relacionado con tokens, manejarlo y salir
-        if (handleAuthError(error)) return;
+        if (handleAuthError(error)) {
+          console.warn('⚠️ Error de autenticación manejado, limpiando sesión');
+          return;
+        }
         throw error;
       }
-      setProfile(data ?? null);
+      
+      if (data) {
+        console.log('✅ Perfil cargado:', { id: data.id, is_admin: data.is_admin });
+        setProfile(data);
+      } else {
+        console.warn('⚠️ No se encontró perfil para el usuario');
+        setProfile(null);
+      }
     } catch (err) {
-      console.error('Error loading profile:', err);
+      console.error('❌ Excepción al cargar perfil:', err);
       setProfile(null);
     }
   };

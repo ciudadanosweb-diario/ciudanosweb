@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, Save, Loader, Image as ImageIcon } from 'lucide-react';
+import { X, Upload, Save, Loader, Image as ImageIcon, AlertCircle } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
@@ -65,7 +65,10 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
   const [hasDraft, setHasDraft] = useState(false);
   const [showDraftNotification, setShowDraftNotification] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const uploadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [formData, setFormData] = useState<ArticleForm>({
     title: '',
     subtitle: '',
@@ -250,18 +253,33 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
 
     // Validar tipo de archivo
     if (!file.type.startsWith('image/')) {
-      alert('Por favor selecciona una imagen válida (JPEG, PNG, etc.)');
+      setUploadError('Por favor selecciona una imagen válida (JPEG, PNG, etc.)');
+      setTimeout(() => setUploadError(null), 5000);
       return;
     }
 
     // Validar tamaño inicial (máximo 10MB antes de comprimir)
     if (file.size > 10 * 1024 * 1024) {
-      alert('La imagen no debe superar 10MB');
+      setUploadError('La imagen no debe superar 10MB');
+      setTimeout(() => setUploadError(null), 5000);
       return;
     }
 
     setUploading(true);
     setUploadProgress(10);
+    setUploadError(null);
+
+    // Crear nuevo AbortController para esta carga
+    abortControllerRef.current = new AbortController();
+
+    // Establecer timeout de 60 segundos
+    uploadTimeoutRef.current = setTimeout(() => {
+      abortControllerRef.current?.abort();
+      setUploading(false);
+      setUploadProgress(0);
+      setUploadError('Tiempo de carga agotado. Intenta de nuevo con una imagen más pequeña.');
+      console.error('❌ Timeout en carga de imagen');
+    }, 60000);
 
     try {
       console.log('📤 Iniciando subida de imagen...');
@@ -306,6 +324,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
           'x-upsert': 'false',
         },
         body: compressedFile,
+        signal: abortControllerRef.current.signal,
       });
 
       if (!uploadResponse.ok) {
@@ -334,15 +353,40 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
       setTimeout(() => {
         setUploadProgress(0);
         setUploading(false);
+        setUploadError(null);
       }, 1000);
 
       console.log('✅ Proceso completado exitosamente');
     } catch (error: any) {
       console.error('❌ Error completo:', error);
-      alert(`Error al subir la imagen: ${error.message || 'Error desconocido'}`);
+      
+      if (error.name === 'AbortError') {
+        setUploadError('Carga cancelada o tiempo agotado');
+      } else {
+        setUploadError(`Error al subir: ${error.message || 'Error desconocido'}`);
+      }
+      
       setUploading(false);
       setUploadProgress(0);
+    } finally {
+      // Limpiar timeout
+      if (uploadTimeoutRef.current) {
+        clearTimeout(uploadTimeoutRef.current);
+      }
     }
+  };
+
+  const handleCancelUpload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    if (uploadTimeoutRef.current) {
+      clearTimeout(uploadTimeoutRef.current);
+    }
+    setUploading(false);
+    setUploadProgress(0);
+    setUploadError(null);
+    console.log('🛑 Carga cancelada por usuario');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -713,11 +757,37 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
                     )}
                   </label>
                   {uploading && (
-                    <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
+                    <div className="mt-2 space-y-2">
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCancelUpload}
+                        className="w-full px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+                      >
+                        Cancelar carga
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Error Message */}
+                  {uploadError && (
+                    <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+                      <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-red-800">{uploadError}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setUploadError(null)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <X size={18} />
+                      </button>
                     </div>
                   )}
                 </div>

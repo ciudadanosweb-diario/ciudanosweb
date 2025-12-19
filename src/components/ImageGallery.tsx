@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Upload, Trash2, X, Loader, CheckCircle, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Upload, Trash2, X, Loader, CheckCircle, Image as ImageIcon, AlertCircle } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -24,9 +24,22 @@ export default function ImageGallery({ onSelectImage, selectionMode = false, onC
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const uploadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     loadImages();
+    
+    // Cleanup al desmontar
+    return () => {
+      if (uploadTimeoutRef.current) {
+        clearTimeout(uploadTimeoutRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, []);
 
   const loadImages = async () => {
@@ -84,17 +97,32 @@ export default function ImageGallery({ onSelectImage, selectionMode = false, onC
     if (!file || !user) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Por favor selecciona una imagen válida');
+      setUploadError('Por favor selecciona una imagen válida');
+      setTimeout(() => setUploadError(null), 5000);
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      alert('La imagen no debe superar 10MB');
+      setUploadError('La imagen no debe superar 10MB');
+      setTimeout(() => setUploadError(null), 5000);
       return;
     }
 
     setUploading(true);
     setUploadProgress(10);
+    setUploadError(null);
+
+    // Crear nuevo AbortController para esta carga
+    abortControllerRef.current = new AbortController();
+
+    // Establecer timeout de 60 segundos
+    uploadTimeoutRef.current = setTimeout(() => {
+      abortControllerRef.current?.abort();
+      setUploading(false);
+      setUploadProgress(0);
+      setUploadError('Tiempo de carga agotado. Intenta de nuevo con una imagen más pequeña.');
+      console.error('❌ Timeout en carga de imagen');
+    }, 60000);
 
     try {
       // Comprimir imagen
@@ -129,6 +157,7 @@ export default function ImageGallery({ onSelectImage, selectionMode = false, onC
           'x-upsert': 'false',
         },
         body: compressedFile,
+        signal: abortControllerRef.current.signal,
       });
 
       if (!uploadResponse.ok) {
@@ -141,17 +170,42 @@ export default function ImageGallery({ onSelectImage, selectionMode = false, onC
       setTimeout(() => {
         setUploadProgress(0);
         setUploading(false);
+        setUploadError(null);
         loadImages(); // Recargar galería
       }, 1000);
 
     } catch (error: any) {
       console.error('Error al subir imagen:', error);
-      alert(`Error al subir la imagen: ${error.message}`);
+      
+      if (error.name === 'AbortError') {
+        setUploadError('Carga cancelada o tiempo agotado');
+      } else {
+        setUploadError(`Error al subir: ${error.message}`);
+      }
+      
       setUploading(false);
       setUploadProgress(0);
+    } finally {
+      // Limpiar timeout
+      if (uploadTimeoutRef.current) {
+        clearTimeout(uploadTimeoutRef.current);
+      }
     }
 
     e.target.value = '';
+  };
+
+  const handleCancelUpload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    if (uploadTimeoutRef.current) {
+      clearTimeout(uploadTimeoutRef.current);
+    }
+    setUploading(false);
+    setUploadProgress(0);
+    setUploadError(null);
+    console.log('🛑 Carga cancelada por usuario');
   };
 
   const handleDeleteImage = async (imageName: string) => {
@@ -232,12 +286,38 @@ export default function ImageGallery({ onSelectImage, selectionMode = false, onC
             </>
           )}
         </label>
+        
+        {/* Progress Bar */}
         {uploading && (
-          <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-            <div
-              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${uploadProgress}%` }}
-            />
+          <div className="mt-3">
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+            <button
+              onClick={handleCancelUpload}
+              className="w-full px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+            >
+              Cancelar carga
+            </button>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {uploadError && (
+          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+            <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-red-800">{uploadError}</p>
+            </div>
+            <button
+              onClick={() => setUploadError(null)}
+              className="text-red-600 hover:text-red-800"
+            >
+              <X size={18} />
+            </button>
           </div>
         )}
       </div>

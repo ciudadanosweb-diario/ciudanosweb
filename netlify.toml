@@ -8,20 +8,7 @@
 [build.environment]
   NODE_VERSION = "20"
 
-# Redirecciones para manejar rutas de artículos con pre-renderizado
-# Esto permite que los bots de redes sociales vean los meta tags correctos
-# Todas las rutas /article/:id van a la función que detecta bots
-[[redirects]]
-  from = "/article/:id"
-  to = "/.netlify/functions/og-tags?id=:id"
-  status = 200
-  force = true
-
-# Redirección para todas las demás rutas al index.html (SPA)
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+# Redirecciones manejadas en public/_redirects para evitar conflictos
 
 # Headers de seguridad y cache
 [[headers]]

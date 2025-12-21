@@ -15,7 +15,7 @@ echo ""
 read -p "Opción (1-5): " option
 
 case $option in
-  1)
+  1)    
     echo "🔍 Verificando configuración..."
     bash scripts/pre-deploy-check.sh
     ;;

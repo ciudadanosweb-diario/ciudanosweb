@@ -21,7 +21,7 @@ export async function handler(event, context) {
   console.log('Event path:', event.path);
   // Obtener el ID del artículo del path (para rewrites desde _redirects)
   const pathParts = event.path.split('/');
-  const articleId = pathParts[3]; // /.netlify/functions/og-tags/:id
+  const articleId = pathParts[2]; // /article/:id -> ['', 'article', ':id']
   console.log('Article ID from path:', articleId);
 
   if (!articleId || articleId === 'og-tags') {

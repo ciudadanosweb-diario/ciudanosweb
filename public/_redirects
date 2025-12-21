@@ -1,5 +1,7 @@
 # Redirecciones para Netlify
-# Este archivo es un respaldo si netlify.toml no funciona
 
-# Todas las rutas van al index.html (necesario para SPAs)
+# Rutas de artículos van a la función serverless para meta tags
+/article/:id  /.netlify/functions/og-tags?id=:id  200
+
+# Todas las demás rutas van al index.html (SPA)
 /*    /index.html   200

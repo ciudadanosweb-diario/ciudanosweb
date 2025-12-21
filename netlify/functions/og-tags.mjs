@@ -7,22 +7,21 @@ const supabase = supabaseUrl && supabaseKey
   ? createClient(supabaseUrl, supabaseKey)
   : null;
 
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+function stripHtml(html) {
+  if (!html) return '';
+  return html.replace(/<[^>]*>/g, '').trim();
+}
+
+function truncateText(text, maxLength = 160) {
+  if (!text) return '';
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength).replace(/\s+\S*$/, '') + '...';
 }
 
 export async function handler(event, context) {
-  console.log('Event path:', event.path);
   // Obtener el ID del artículo del path (para rewrites desde _redirects)
   const pathParts = event.path.split('/');
   const articleId = pathParts[2]; // /article/:id -> ['', 'article', ':id']
-  console.log('Article ID from path:', articleId);
 
   if (!articleId || articleId === 'og-tags') {
     return {
@@ -41,6 +40,9 @@ export async function handler(event, context) {
   // Detectar si es un bot
   const userAgent = event.headers['user-agent'] || '';
   const isBot = /facebookexternalhit|Facebot|Twitterbot|LinkedInBot|WhatsApp|TelegramBot|Slackbot|SkypeUriPreview|vkShare|Pinterest|Discordbot|Google-Structured-Data-Testing-Tool/i.test(userAgent);
+  
+  console.log(`[OG-Tags] User-Agent: ${userAgent}`);
+  console.log(`[OG-Tags] Is Bot: ${isBot}`);
 
   // Obtener la URL base del sitio
   const siteUrl = process.env.URL || 'https://ciudadanos-web.com';
@@ -66,7 +68,7 @@ export async function handler(event, context) {
     // Obtener el artículo de Supabase
     const { data: article, error } = await supabase
       .from('articles')
-      .select('id, title, excerpt, subtitle, image_url, published_at, created_at')
+      .select('id, title, excerpt, subtitle, content, image_url, published_at, created_at')
       .eq('id', articleId)
       .maybeSingle();
 
@@ -94,7 +96,7 @@ export async function handler(event, context) {
     }
 
     const title = article.title || 'Ciudadanos Digital';
-    const description = article.excerpt || article.subtitle || article.title || '';
+    const description = article.excerpt || article.subtitle || truncateText(stripHtml(article.content)) || article.title || '';
     const publishedTime = article.published_at || article.created_at || new Date().toISOString();
 
     // Generar HTML con meta tags Open Graph

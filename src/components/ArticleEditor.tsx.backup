@@ -1,23 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, Save, Loader, Image as ImageIcon, AlertCircle } from 'lucide-react';
-import imageCompression from 'browser-image-compression';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
-import { supabase, Article, Category } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
-import ImageGallery from './ImageGallery';
-
-type ArticleEditorProps = {
-  onClose: () => void;
-  onSave: () => void;
-  editingArticle?: Article | null;
-};
-
-type ArticleForm = {
-  title: string;
-  subtitle: string;
-  content: string;
-  excerpt: string;
+// Backup disabled: use src/components/ArticleEditor.tsx instead (simplified editor)
+export default null;
   category_id: string;
   image_url: string;
   is_featured: boolean;

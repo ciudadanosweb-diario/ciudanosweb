@@ -28,6 +28,7 @@ export default function ArticleEditPage() {
   const [categories] = useState<LocalCategory[]>(getAllCategories());
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [imagePreview, setImagePreview] = useState<string>('');
   const [showGallery, setShowGallery] = useState(false);
@@ -244,6 +245,88 @@ export default function ArticleEditPage() {
     setShowGallery(false);
   };
 
+  // Función reutilizable de guardado accesible desde el header (Forzar sesión y guardar)
+  const performSave = async (options?: { abortController?: AbortController; timeoutMs?: number; navigateAfter?: boolean }) => {
+    const { abortController, timeoutMs = 10000, navigateAfter = true } = options || {};
+    let timeoutId: NodeJS.Timeout | undefined;
+
+    try {
+      console.log('💾 performSave: verificando sesión...');
+      setStatusMessage('Verificando sesión...');
+      const sessionReady = await ensureSessionReady();
+      if (!sessionReady) throw new Error('Error de autenticación. Vuelve a iniciar sesión.');
+
+      console.log('✅ performSave: sesión lista');
+      setStatusMessage('Sesión lista');
+
+      const articleData = {
+        title: formData.title,
+        subtitle: formData.subtitle,
+        content: formData.content,
+        excerpt: formData.excerpt || formData.content.substring(0, 150) + '...',
+        category: formData.category || null,
+        image_url: formData.image_url,
+        is_featured: formData.is_featured,
+        published_at: formData.published_at,
+        author_id: user!.id,
+      };
+
+      console.log('📝 performSave: preparando datos');
+      setStatusMessage('Preparando datos...');
+
+      // timeout si se proporciona AbortController
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        if (timeoutMs && abortController) {
+          timeoutId = setTimeout(() => {
+            console.error('⏰ performSave TIMEOUT');
+            abortController.abort();
+            reject(new Error('Timeout: El guardado tomó demasiado tiempo'));
+          }, timeoutMs);
+        }
+      });
+
+      const saveOp = async () => {
+        console.log('🚀 performSave: ejecutando operación DB');
+        console.log('🚀 performSave: payload', articleData);
+        let result;
+        if (id && id !== 'new') {
+          result = await supabase.from('articles').update(articleData).eq('id', id);
+        } else {
+          result = await supabase.from('articles').insert([articleData]);
+        }
+
+        console.log('🚀 performSave: respuesta raw', result);
+
+        if (abortController?.signal.aborted) {
+          console.error('🚫 performSave: abortada por timeout');
+          throw new Error('Operación cancelada por timeout');
+        }
+
+        if (result?.error) {
+          console.error('❌ performSave: error returned by supabase', result.error);
+          throw result.error;
+        }
+
+        return result;
+      };
+
+      const result = abortController ? await Promise.race([saveOp(), timeoutPromise]) : await saveOp();
+
+      if (timeoutId) clearTimeout(timeoutId);
+
+      console.log('✅ performSave: guardado exitoso', result);
+      setStatusMessage('Guardado exitoso');
+      if (navigateAfter) navigate('/admin');
+      return result;
+
+    } catch (err) {
+      if (timeoutId) clearTimeout(timeoutId);
+      console.error('❌ performSave error', err);
+      setStatusMessage('Error al guardar: ' + (err?.message || String(err)));
+      throw err;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -257,125 +340,17 @@ export default function ArticleEditPage() {
       return;
     }
 
-    // Crear AbortController para poder cancelar la operación
+    // Uso normal desde el form: crear AbortController y delegar en performSave definida en scope
     const abortController = new AbortController();
-    let timeoutId: NodeJS.Timeout;
-
     try {
       setSaving(true);
-      console.log('💾 Iniciando guardado de artículo...');
-
-      // PASO 1: Verificar y asegurar que la sesión esté lista
-      console.log('🔐 Verificando sesión antes de guardar...');
-      const sessionReady = await ensureSessionReady();
-      
-      if (!sessionReady) {
-        throw new Error('Error de autenticación. Vuelve a iniciar sesión.');
-      }
-
-      console.log('✅ Sesión verificada y lista');
-
-      const articleData = {
-        title: formData.title,
-        subtitle: formData.subtitle,
-        content: formData.content,
-        excerpt: formData.excerpt || formData.content.substring(0, 150) + '...',
-        category: formData.category || null,
-        image_url: formData.image_url,
-        is_featured: formData.is_featured,
-        published_at: formData.published_at,
-        author_id: user.id,
-      };
-
-      console.log('📝 Preparando datos del artículo:', {
-        title: articleData.title,
-        category: articleData.category,
-        hasImage: !!articleData.image_url,
-        isFeatured: articleData.is_featured
-      });
-
-      // PASO 2: Configurar timeout de 10 segundos (más agresivo)
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          console.error('⏰ TIMEOUT: Cancelando operación después de 10 segundos');
-          abortController.abort();
-          reject(new Error('Timeout: El guardado tomó demasiado tiempo (10s)'));
-        }, 10000);
-      });
-
-      // PASO 3: Función de guardado con verificación de abort
-      const saveWithAbort = async () => {
-        console.log('🚀 Iniciando operación de base de datos...');
-
-        let result;
-        try {
-          if (id && id !== 'new') {
-            console.log('🔄 Actualizando artículo existente:', id);
-            result = await supabase
-              .from('articles')
-              .update(articleData)
-              .eq('id', id);
-            console.log('📤 Update enviado a Supabase');
-          } else {
-            console.log('➕ Creando nuevo artículo');
-            result = await supabase
-              .from('articles')
-              .insert([articleData]);
-            console.log('📤 Insert enviado a Supabase');
-          }
-
-          // Verificar si fue abortado
-          if (abortController.signal.aborted) {
-            console.log('🛑 Operación abortada por timeout');
-            throw new Error('Operación cancelada por timeout');
-          }
-
-          console.log('📨 Respuesta cruda de Supabase:', result);
-          return result;
-
-        } catch (dbError: any) {
-          console.error('💥 Error en operación de BD:', dbError);
-
-          // Si fue abortado, lanzar error específico
-          if (abortController.signal.aborted) {
-            throw new Error('Operación cancelada por timeout');
-          }
-
-          throw dbError;
-        }
-      };
-
-      // PASO 4: Ejecutar con timeout usando AbortController
-      console.log('⏳ Ejecutando guardado con timeout de 10 segundos...');
-
-      const result = await Promise.race([saveWithAbort(), timeoutPromise]);
-
-      // Limpiar timeout si se completó exitosamente
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        console.log('✅ Timeout limpiado - operación completada');
-      }
-
-      console.log('📦 Respuesta final procesada:', result);
-
-      if (result?.error) {
-        console.error('❌ Error en respuesta de Supabase:', result.error);
-        throw new Error(result.error.message || 'Error al guardar artículo');
-      }
-
-      console.log('✅ Artículo guardado exitosamente');
+      setStatusMessage('Iniciando guardado...');
+      console.log('💾 handleSubmit: delegando en performSave...');
+      await performSave({ abortController, timeoutMs: 10000, navigateAfter: true });
       alert('Artículo guardado correctamente');
-      navigate('/admin');
-
+      setStatusMessage('');
     } catch (error: any) {
       console.error('❌ Error completo en handleSubmit:', error);
-
-      // Limpiar timeout si aún existe
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-
-      // Manejo específico de errores
       if (error.message?.includes('Timeout') || error.message?.includes('cancelada')) {
         alert('⏰ El guardado tomó demasiado tiempo. Esto puede pasar al cambiar de pestaña.\n\nIntenta guardar nuevamente.');
       } else if (error.message?.includes('JWT') || error.message?.includes('auth') || error.message?.includes('session')) {
@@ -416,9 +391,69 @@ export default function ArticleEditPage() {
                 <ArrowLeft className="w-5 h-5" />
                 <span>Volver al Panel</span>
               </button>
-              <h1 className="text-2xl font-bold text-gray-900">
-                {id === 'new' ? 'Nuevo Artículo' : 'Editar Artículo'}
-              </h1>
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">
+                    {id === 'new' ? 'Nuevo Artículo' : 'Editar Artículo'}
+                  </h1>
+                  {statusMessage && (
+                    <div className="text-sm text-amber-600 mt-1">{statusMessage}</div>
+                  )}
+                </div>
+                <button
+                  onClick={async () => {
+                    // Reintentos automáticos: verificar sesión y llamar a performSave hasta 3 veces
+                    setStatusMessage('Forzando sesión y guardando...');
+                    setSaving(true);
+                    try {
+                      let success = false;
+                      for (let attempt = 1; attempt <= 3; attempt++) {
+                        console.log(`🔁 Forzar-save intento ${attempt}`);
+                        setStatusMessage(`Intento ${attempt} de 3...`);
+                        const ok = await ensureSessionReady();
+                        if (!ok) {
+                          console.warn('No se pudo verificar sesión antes del intento', attempt);
+                          // esperar un poco y reintentar
+                          await new Promise((r) => setTimeout(r, 500));
+                          continue;
+                        }
+
+                        try {
+                          await performSave?.({ navigateAfter: false } as any);
+                          success = true;
+                          break;
+                        } catch (err: any) {
+                          console.error('Error en performSave intento', attempt, err);
+                          // si es error de sesión, intentar refrescar y reintentar
+                          if (err?.message?.includes('JWT') || err?.message?.includes('session') || err?.message?.includes('auth')) {
+                            console.warn('Error de sesión detectado, reintentando después de refresh');
+                            try { await supabase.auth.refreshSession(); } catch(e){}
+                            await new Promise((r) => setTimeout(r, 500));
+                            continue;
+                          }
+                          // otro error: esperar y reintentar
+                          await new Promise((r) => setTimeout(r, 500));
+                        }
+                      }
+
+                      if (success) {
+                        alert('Guardado forzado correctamente');
+                        setStatusMessage('Guardado forzado OK');
+                        navigate('/admin');
+                      } else {
+                        alert('No se pudo guardar tras reintentos. Revisa consola y vuelve a intentar.');
+                        setStatusMessage('Fallo al forzar guardado');
+                      }
+                    } catch (err: any) {
+                      console.error('Error al forzar sesión y guardar:', err);
+                      alert('Error al forzar sesión y guardar: ' + (err?.message || String(err)));
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  className="ml-3 px-3 py-1 bg-amber-500 text-white rounded hover:bg-amber-600 text-sm"
+                >
+                  Forzar sesión y guardar
+                </button>
             </div>
           </div>
         </div>

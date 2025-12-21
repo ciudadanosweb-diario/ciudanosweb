@@ -1,3 +1,201 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Save, Loader } from 'lucide-react';
+import { supabase, Article } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import { getAllCategories, LocalCategory } from '../lib/categories';
+
+type Props = {
+  onClose: () => void;
+  onSave: () => void;
+  editingArticle?: Article | null;
+};
+
+export default function ArticleEditor({ onClose, onSave, editingArticle }: Props) {
+  const { user, ensureSessionReady } = useAuth();
+  const [categories] = useState<LocalCategory[]>(getAllCategories());
+
+  const [title, setTitle] = useState(editingArticle?.title || '');
+  const [content, setContent] = useState(editingArticle?.content || '');
+  const [category, setCategory] = useState(editingArticle?.category || '');
+
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState('');
+
+  const isSavingRef = useRef(false);
+
+  const STORAGE_KEY = editingArticle ? `article-draft-${editingArticle.id}` : 'article-draft-new';
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (!editingArticle && (parsed.title || parsed.content)) {
+          // Restaurar automáticamente sin confirmaciones para simplicidad
+          setTitle(parsed.title || '');
+          setContent(parsed.content || '');
+          setCategory(parsed.category || '');
+          console.log('🔄 Borrador restaurado automáticamente');
+        }
+      }
+    } catch (e) {
+      console.error('Error restaurando borrador', e);
+    }
+  }, []);
+
+  const saveToLocal = () => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ title, content, category }));
+      console.log('💾 Borrador guardado local');
+    } catch (e) {
+      console.error('Error guardando borrador local', e);
+    }
+  };
+
+  useEffect(() => {
+    // autosave local cada 1.5s tras cambios
+    const id = setTimeout(() => {
+      if (title || content) saveToLocal();
+    }, 1500);
+    return () => clearTimeout(id);
+  }, [title, content, category]);
+
+  const clearLocal = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+  };
+
+  // timeout wrapper to avoid indefinite hanging
+  const withTimeout = <T,>(p: Promise<T>, ms = 15000) => {
+    const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), ms));
+    return Promise.race([p, timeout]);
+  };
+
+  const saveArticle = async () => {
+    if (isSavingRef.current) {
+      console.warn('Ya hay un guardado en progreso');
+      return;
+    }
+
+    if (!user) {
+      alert('Debes iniciar sesión para publicar');
+      return;
+    }
+
+    if (!title || !content || !category) {
+      alert('Completa `Título`, `Contenido` y `Categoría`.');
+      return;
+    }
+
+    isSavingRef.current = true;
+    setSaving(true);
+    setStatus('Guardando...');
+
+    try {
+      const ok = await ensureSessionReady();
+      if (!ok) throw new Error('no-session');
+
+      const payload = {
+        title,
+        subtitle: '',
+        content,
+        excerpt: content.slice(0, 150) + '...',
+        category,
+        image_url: '',
+        is_featured: false,
+        published_at: new Date().toISOString(),
+        author_id: user.id,
+      } as any;
+
+      let res;
+      if (editingArticle) {
+        res = await withTimeout(supabase.from('articles').update(payload).eq('id', editingArticle.id));
+      } else {
+        res = await withTimeout(supabase.from('articles').insert([payload]));
+      }
+
+      // supabase returns object with error property
+      if ((res as any).error) {
+        throw (res as any).error;
+      }
+
+      clearLocal();
+      setStatus('Guardado');
+      setTimeout(() => setStatus(''), 1500);
+      onSave();
+      onClose();
+    } catch (err: any) {
+      console.error('Error guardando artículo:', err);
+      if (err.message === 'timeout') {
+        alert('La operación tardó demasiado. Intenta Forzar sesión y guardar.');
+      } else if (err.message === 'no-session') {
+        alert('Sesión no válida. Usa Forzar sesión o vuelve a iniciar sesión.');
+      } else {
+        alert(err.message || 'Error al guardar');
+      }
+    } finally {
+      isSavingRef.current = false;
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-3xl w-full p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold">{editingArticle ? 'Editar artículo' : 'Nuevo artículo'}</h2>
+          <div className="flex items-center gap-2">
+            {status && <span className="text-sm text-green-600">{status}</span>}
+            <button onClick={onClose} className="px-3 py-1 border rounded">Cerrar</button>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Título *</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 border rounded" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Categoría *</label>
+            <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full px-3 py-2 border rounded">
+              <option value="">Seleccionar categoría</option>
+              {categories.map((c) => (
+                <option key={c.slug} value={c.slug}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Contenido *</label>
+            <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={12} className="w-full p-3 border rounded" />
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={() => { saveToLocal(); alert('Borrador guardado localmente'); }} className="px-4 py-2 border rounded">Guardar borrador</button>
+
+            <button type="button" onClick={async () => {
+              setStatus('Forzando sesión...');
+              const ok = await ensureSessionReady();
+              setStatus('');
+              if (ok) {
+                // intentar guardar inmediatamente
+                await saveArticle();
+              } else {
+                alert('No se pudo verificar la sesión. Vuelve a iniciar sesión.');
+              }
+            }} className="px-4 py-2 bg-amber-500 text-white rounded">Forzar sesión y guardar</button>
+
+            <button type="button" onClick={saveArticle} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded flex items-center gap-2">
+              {saving ? <Loader className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} <span>{saving ? 'Guardando...' : (editingArticle ? 'Actualizar' : 'Publicar')}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Upload, Save, Loader, Image as ImageIcon } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
@@ -36,6 +234,8 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
   const [autoSaveStatus, setAutoSaveStatus] = useState<string>('');
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedDataRef = useRef<string>('');
+  const isSavingRef = useRef<boolean>(false);
+  const uploadingRef = useRef<boolean>(false);
 
   const [formData, setFormData] = useState<ArticleForm>({
     title: '',
@@ -121,12 +321,22 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
     }
   }, [formData, autoSave]);
 
-  // Guardar antes de cerrar/cambiar ventana
+  // Guardar antes de cerrar/cambiar ventana y resetear estado al volver
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
+        // Cuando se oculta la pestaña
         saveToLocalStorage();
         console.log('👁️ Ventana oculta - guardado automático');
+      } else {
+        // Cuando vuelve a ser visible - RESETEAR estados de UI
+        console.log('👁️ Ventana visible - reseteando estados UI');
+        if (!isSavingRef.current) {
+          setSaving(false);
+        }
+        if (!uploadingRef.current) {
+          setUploading(false);
+        }
       }
     };
 
@@ -213,6 +423,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
 
     try {
       setUploading(true);
+      uploadingRef.current = true;
 
       // Comprimir imagen con timeout
       const options = {
@@ -319,6 +530,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
     } finally {
       // SIEMPRE desbloquear el botón, sin importar qué suceda
       setUploading(false);
+      uploadingRef.current = false;
       console.log('🔓 Botón de subida desbloqueado');
     }
   };
@@ -342,13 +554,9 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
       return;
     }
 
-    // Crear AbortController para poder cancelar la operación
-    const abortController = new AbortController();
-    let timeoutId: NodeJS.Timeout;
-
-    try {
-      setSaving(true);
-      console.log('💾 Iniciando guardado de artículo...');
+    // extraer la lógica de guardado a una función reutilizable
+    const saveArticle = async () => {
+      console.log('💾 Iniciando guardado de artículo (saveArticle)...');
 
       // PASO 1: Verificar y asegurar que la sesión esté lista
       console.log('🔐 Verificando sesión antes de guardar...');
@@ -369,7 +577,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
         image_url: formData.image_url,
         is_featured: formData.is_featured,
         published_at: formData.published_at,
-        author_id: user.id,
+        author_id: user!.id,
       };
 
       console.log('📝 Preparando datos del artículo:', {
@@ -379,104 +587,89 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
         isFeatured: articleData.is_featured
       });
 
-      // PASO 2: Configurar timeout de 10 segundos (más agresivo)
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          console.error('⏰ TIMEOUT: Cancelando operación después de 10 segundos');
-          abortController.abort();
-          reject(new Error('Timeout: El guardado tomó demasiado tiempo (10s)'));
-        }, 10000);
-      });
+      // Intentar guardar con reintentos automáticos
+      let resultado;
+      let intentos = 0;
+      const MAX_INTENTOS = 3;
 
-      // PASO 3: Función de guardado con verificación de abort
-      const saveWithAbort = async () => {
-        console.log('🚀 Iniciando operación de base de datos...');
+      while (intentos < MAX_INTENTOS) {
+        intentos++;
+        console.log(`🚀 Intento ${intentos}/${MAX_INTENTOS} de guardado...`);
 
-        let result;
         try {
           if (editingArticle) {
             console.log('🔄 Actualizando artículo existente:', editingArticle.id);
-            result = await supabase
+            resultado = await supabase
               .from('articles')
               .update(articleData)
               .eq('id', editingArticle.id);
-            console.log('📤 Update enviado a Supabase');
           } else {
             console.log('➕ Creando nuevo artículo');
-            result = await supabase
+            resultado = await supabase
               .from('articles')
               .insert([articleData]);
-            console.log('📤 Insert enviado a Supabase');
           }
 
-          // Verificar si fue abortado
-          if (abortController.signal.aborted) {
-            console.log('🛑 Operación abortada por timeout');
-            throw new Error('Operación cancelada por timeout');
+          if (!resultado.error) {
+            console.log('✅ Guardado exitoso');
+            break;
           }
 
-          console.log('📨 Respuesta cruda de Supabase:', result);
-          return result;
+          const errorCode = resultado.error.code;
+          const errorMsg = resultado.error.message || '';
+          const esErrorPermiso = 
+            errorCode === 'PGRST301' || 
+            errorCode === '42501' ||
+            errorMsg.includes('permission') || 
+            errorMsg.includes('JWT') ||
+            errorMsg.includes('RLS');
 
-        } catch (dbError: any) {
-          console.error('💥 Error en operación de BD:', dbError);
-
-          // Si fue abortado, lanzar error específico
-          if (abortController.signal.aborted) {
-            throw new Error('Operación cancelada por timeout');
+          if (esErrorPermiso && intentos < MAX_INTENTOS) {
+            console.warn(`⚠️ Error de permisos, refrescando sesión...`);
+            await supabase.auth.refreshSession();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            continue; // Reintentar
           }
 
-          throw dbError;
+          throw new Error(resultado.error.message);
+
+        } catch (error: any) {
+          if (intentos >= MAX_INTENTOS) {
+            throw error;
+          }
+          console.warn(`⚠️ Error en intento ${intentos}, reintentando...`, error);
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
-      };
-
-      // PASO 4: Ejecutar con timeout usando AbortController
-      console.log('⏳ Ejecutando guardado con timeout de 10 segundos...');
-
-      const result = await Promise.race([saveWithAbort(), timeoutPromise]);
-
-      // Limpiar timeout si se completó exitosamente
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        console.log('✅ Timeout limpiado - operación completada');
       }
 
-      console.log('📦 Respuesta final procesada:', result);
-
-      if (result?.error) {
-        console.error('❌ Error en respuesta de Supabase:', result.error);
-        throw new Error(result.error.message || 'Error al guardar artículo');
+      if (resultado?.error) {
+        console.error('❌ Error después de todos los intentos:', resultado.error);
+        throw new Error(resultado.error.message || 'Error al guardar artículo');
       }
 
-      // Limpiar localStorage después de guardar exitosamente
       clearLocalStorage();
 
       console.log('✅ Artículo guardado exitosamente');
       alert(editingArticle ? 'Artículo actualizado exitosamente' : 'Artículo publicado exitosamente');
       onSave();
       onClose();
-      
+    };
+
+    // Ejecutar saveArticle con manejo global de estados
+    try {
+      isSavingRef.current = true;
+      setSaving(true);
+      await saveArticle();
     } catch (error: any) {
       console.error('❌ Error completo en handleSubmit:', error);
-
-      // Limpiar timeout si aún existe
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-
-      // Manejo específico de errores
-      if (error.message?.includes('Timeout') || error.message?.includes('cancelada')) {
-        alert('⏰ El guardado tomó demasiado tiempo. Esto puede pasar al cambiar de pestaña.\n\nIntenta guardar nuevamente.');
-      } else if (error.message?.includes('JWT') || error.message?.includes('auth') || error.message?.includes('session')) {
-        alert('🔐 Error de sesión. Por favor, vuelve a iniciar sesión e intenta nuevamente.');
-      } else if (error.name === 'AbortError' || abortController.signal.aborted) {
-        alert('🛑 Operación cancelada. Intenta guardar nuevamente.');
+      if (error?.message?.includes('JWT') || error?.message?.includes('auth') || error?.message?.includes('session')) {
+        alert('🔐 Error de sesión. Forzar sesión o vuelve a iniciar sesión.');
       } else {
-        alert('Error al guardar artículo: ' + error.message);
+        alert(error?.message || 'Error al guardar el artículo');
       }
     } finally {
+      isSavingRef.current = false;
       setSaving(false);
-      console.log('🔄 Estado de guardado reseteado');
     }
   };
 
@@ -670,6 +863,28 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
               className="px-6 py-2 border rounded-lg hover:bg-gray-50"
             >
               Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                // Forzar verificación de sesión y reintentar guardar si corresponde
+                try {
+                  setAutoSaveStatus('Verificando sesión...');
+                  const ok = await ensureSessionReady();
+                  setAutoSaveStatus('');
+                  if (ok) {
+                    alert('Sesión verificada. Si el botón estaba tildado, intenta publicar de nuevo.');
+                  } else {
+                    alert('No se pudo forzar la sesión. Vuelve a iniciar sesión.');
+                  }
+                } catch (err) {
+                  setAutoSaveStatus('');
+                  alert('Error al forzar la sesión');
+                }
+              }}
+              className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600"
+            >
+              Forzar sesión
             </button>
             <button
               type="submit"

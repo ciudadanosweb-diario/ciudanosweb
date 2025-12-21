@@ -25,17 +25,32 @@ export default function ArticleDetail() {
       // Actualizar meta tags para compartir en redes sociales
       document.title = `${article.title} - Ciudadanos Digital`;
       
-      // Open Graph meta tags
+      // Asegurar que la URL de la imagen sea absoluta para compartir
+      const imageUrl = article.image_url ? 
+        (article.image_url.startsWith('http') ? article.image_url : `${window.location.origin}${article.image_url}`) : 
+        '';
+      
+      // Open Graph meta tags - Facebook, LinkedIn, etc.
       const metaTags = [
         { property: 'og:title', content: article.title },
         { property: 'og:description', content: article.excerpt || article.subtitle || article.title },
-        { property: 'og:image', content: article.image_url || '' },
+        { property: 'og:image', content: imageUrl },
+        { property: 'og:image:secure_url', content: imageUrl },
+        { property: 'og:image:type', content: 'image/jpeg' },
+        { property: 'og:image:width', content: '1200' },
+        { property: 'og:image:height', content: '630' },
+        { property: 'og:image:alt', content: article.title },
         { property: 'og:url', content: window.location.href },
         { property: 'og:type', content: 'article' },
+        { property: 'og:site_name', content: 'Ciudadanos Digital' },
+        { property: 'article:published_time', content: article.published_at || article.created_at },
+        { property: 'article:author', content: 'Ciudadanos Digital' },
+        // Twitter meta tags
         { name: 'twitter:card', content: 'summary_large_image' },
         { name: 'twitter:title', content: article.title },
         { name: 'twitter:description', content: article.excerpt || article.subtitle || article.title },
-        { name: 'twitter:image', content: article.image_url || '' },
+        { name: 'twitter:image', content: imageUrl },
+        { name: 'twitter:image:alt', content: article.title },
       ];
 
       metaTags.forEach(({ property, name, content }) => {
@@ -191,7 +206,10 @@ export default function ArticleDetail() {
                   url={window.location.href}
                   title={article.title}
                   description={article.excerpt || article.subtitle}
-                  imageUrl={article.image_url}
+                  imageUrl={article.image_url ? 
+                    (article.image_url.startsWith('http') ? article.image_url : `${window.location.origin}${article.image_url}`) : 
+                    undefined
+                  }
                 />
               </div>
             </div>

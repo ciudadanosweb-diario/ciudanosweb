@@ -10,12 +10,12 @@
 
 # Redirecciones para manejar rutas de artículos con pre-renderizado
 # Esto permite que los bots de redes sociales vean los meta tags correctos
+# Todas las rutas /article/:id van a la función que detecta bots
 [[redirects]]
   from = "/article/:id"
   to = "/.netlify/functions/og-tags?id=:id"
   status = 200
-  force = false
-  conditions = {User-Agent = ["facebookexternalhit","Facebot","Twitterbot","LinkedInBot","WhatsApp","TelegramBot","Slackbot","SkypeUriPreview","vkShare","Pinterest","Discordbot"]}
+  force = true
 
 # Redirección para todas las demás rutas al index.html (SPA)
 [[redirects]]

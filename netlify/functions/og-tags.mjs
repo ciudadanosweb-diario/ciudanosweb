@@ -35,6 +35,30 @@ export async function handler(event, context) {
     };
   }
 
+  // Detectar si es un bot
+  const userAgent = event.headers['user-agent'] || '';
+  const isBot = /facebookexternalhit|Facebot|Twitterbot|LinkedInBot|WhatsApp|TelegramBot|Slackbot|SkypeUriPreview|vkShare|Pinterest|Discordbot|Google-Structured-Data-Testing-Tool/i.test(userAgent);
+
+  // Obtener la URL base del sitio
+  const siteUrl = process.env.URL || 'https://ciudadanos-web.com';
+  const articleUrl = `${siteUrl}/#/article/${articleId}`;
+  
+  // Si no es un bot, redirigir directamente a la URL con hash
+  if (!isBot) {
+    return {
+      statusCode: 302,
+      headers: {
+        'Location': articleUrl,
+        'Cache-Control': 'no-cache'
+      },
+      body: ''
+    };
+  }
+
+  // Si es un bot, generar HTML con meta tags
+  console.log(`[OG-Tags] Bot detectado: ${userAgent}`);
+  console.log(`[OG-Tags] Sirviendo meta tags para artículo: ${articleId}`);
+
   try {
     // Obtener el artículo de Supabase
     const { data: article, error } = await supabase
@@ -58,9 +82,7 @@ export async function handler(event, context) {
       };
     }
 
-    // Obtener la URL base del sitio
-    const siteUrl = process.env.URL || 'https://ciudadanos-web.com';
-    const articleUrl = `${siteUrl}/#/article/${article.id}`;
+    const shareUrl = `${siteUrl}/article/${article.id}`; // URL para compartir (sin hash)
     
     // Asegurar URL absoluta para la imagen
     let imageUrl = article.image_url || '';
@@ -92,7 +114,7 @@ export async function handler(event, context) {
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="${escapeHtml(title)}" />
-    <meta property="og:url" content="${escapeHtml(articleUrl)}" />
+    <meta property="og:url" content="${escapeHtml(shareUrl)}" />
     <meta property="article:published_time" content="${escapeHtml(publishedTime)}" />
     <meta property="article:author" content="Ciudadanos Digital" />
     
@@ -104,10 +126,7 @@ export async function handler(event, context) {
     <meta name="twitter:image" content="${escapeHtml(imageUrl)}" />
     <meta name="twitter:image:alt" content="${escapeHtml(title)}" />
     
-    <link rel="canonical" href="${escapeHtml(articleUrl)}" />
-    
-    <!-- Redireccionar a la aplicación después de que el bot lea los meta tags -->
-    <meta http-equiv="refresh" content="0;url=${escapeHtml(articleUrl)}" />
+    <link rel="canonical" href="${escapeHtml(shareUrl)}" />
   </head>
   <body>
     <noscript>
@@ -117,8 +136,10 @@ export async function handler(event, context) {
       <p><a href="${escapeHtml(articleUrl)}">Ver artículo completo</a></p>
     </noscript>
     <script>
-      // Redireccionar inmediatamente para usuarios humanos
-      window.location.href = '${articleUrl}';
+      // Redireccionar para usuarios humanos que lleguen aquí
+      setTimeout(function() {
+        window.location.href = '${articleUrl}';
+      }, 100);
     </script>
   </body>
 </html>`;

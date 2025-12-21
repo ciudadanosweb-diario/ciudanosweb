@@ -1,0 +1,5 @@
+# Redirecciones para Netlify
+# Este archivo es un respaldo si netlify.toml no funciona
+
+# Todas las rutas van al index.html (necesario para SPAs)
+/*    /index.html   200

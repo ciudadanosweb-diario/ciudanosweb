@@ -10,7 +10,9 @@
     "serve": "npm run build && npm run start-server",
     "lint": "eslint .",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "netlify:dev": "netlify dev",
+    "netlify:build": "npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

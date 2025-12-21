@@ -1,0 +1,55 @@
+[build]
+  # Comando para compilar la aplicación
+  command = "npm run build"
+  # Directorio que contiene los archivos compilados
+  publish = "dist"
+  # Variables de entorno (configura también en el dashboard de Netlify)
+  
+[build.environment]
+  NODE_VERSION = "20"
+
+# Redirecciones para manejar rutas de artículos con pre-renderizado
+# Esto permite que los bots de redes sociales vean los meta tags correctos
+[[redirects]]
+  from = "/article/:id"
+  to = "/.netlify/functions/og-tags?id=:id"
+  status = 200
+  force = false
+  conditions = {User-Agent = ["facebookexternalhit","Facebot","Twitterbot","LinkedInBot","WhatsApp","TelegramBot","Slackbot","SkypeUriPreview","vkShare","Pinterest","Discordbot"]}
+
+# Redirección para todas las demás rutas al index.html (SPA)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Headers de seguridad y cache
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Cache para assets estáticos
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Cache para imágenes
+[[headers]]
+  for = "/*.jpg"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000"
+
+[[headers]]
+  for = "/*.png"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000"
+
+[[headers]]
+  for = "/*.webp"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000"

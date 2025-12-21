@@ -20,14 +20,14 @@ type ArticleForm = {
   subtitle: string;
   content: string;
   excerpt: string;
-  category_id: string;
+  category: string; // Slug de la categoría
   image_url: string;
   is_featured: boolean;
   published_at: string | null;
 };
 
 export default function ArticleEditor({ onClose, onSave, editingArticle }: ArticleEditorProps) {
-  const { user } = useAuth();
+  const { user, ensureSessionReady } = useAuth();
   const [categories] = useState<LocalCategory[]>(getAllCategories());
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -42,7 +42,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
     subtitle: '',
     content: '',
     excerpt: '',
-    category_id: '',
+    category: '',
     image_url: '',
     is_featured: false,
     published_at: new Date().toISOString(),
@@ -163,7 +163,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
         subtitle: editingArticle.subtitle || '',
         content: editingArticle.content,
         excerpt: editingArticle.excerpt || '',
-        category_id: editingArticle.category_id || '',
+        category: editingArticle.category || '',
         image_url: editingArticle.image_url || '',
         is_featured: editingArticle.is_featured || false,
         published_at: editingArticle.published_at || null,
@@ -174,7 +174,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
         subtitle: editingArticle.subtitle || '',
         content: editingArticle.content,
         excerpt: editingArticle.excerpt || '',
-        category_id: editingArticle.category_id || '',
+        category: editingArticle.category || '',
         image_url: editingArticle.image_url || '',
         is_featured: editingArticle.is_featured || false,
         published_at: editingArticle.published_at || null,
@@ -337,54 +337,146 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
       return;
     }
 
-    if (!formData.title || !formData.content || !formData.category_id) {
+    if (!formData.title || !formData.content || !formData.category) {
       alert('Por favor completa título, contenido y categoría');
       return;
     }
 
+    // Crear AbortController para poder cancelar la operación
+    const abortController = new AbortController();
+    let timeoutId: NodeJS.Timeout;
+
     try {
       setSaving(true);
+      console.log('💾 Iniciando guardado de artículo...');
+
+      // PASO 1: Verificar y asegurar que la sesión esté lista
+      console.log('🔐 Verificando sesión antes de guardar...');
+      const sessionReady = await ensureSessionReady();
+      
+      if (!sessionReady) {
+        throw new Error('Error de autenticación. Vuelve a iniciar sesión.');
+      }
+
+      console.log('✅ Sesión verificada y lista');
 
       const articleData = {
         title: formData.title,
         subtitle: formData.subtitle,
         content: formData.content,
         excerpt: formData.excerpt || formData.content.substring(0, 150) + '...',
-        category_id: formData.category_id,
+        category: formData.category,
         image_url: formData.image_url,
         is_featured: formData.is_featured,
         published_at: formData.published_at,
         author_id: user.id,
       };
 
-      let error;
-      if (editingArticle) {
-        const result = await supabase
-          .from('articles')
-          .update(articleData)
-          .eq('id', editingArticle.id);
-        error = result.error;
-      } else {
-        const result = await supabase
-          .from('articles')
-          .insert([articleData]);
-        error = result.error;
+      console.log('📝 Preparando datos del artículo:', {
+        title: articleData.title,
+        category: articleData.category,
+        hasImage: !!articleData.image_url,
+        isFeatured: articleData.is_featured
+      });
+
+      // PASO 2: Configurar timeout de 10 segundos (más agresivo)
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          console.error('⏰ TIMEOUT: Cancelando operación después de 10 segundos');
+          abortController.abort();
+          reject(new Error('Timeout: El guardado tomó demasiado tiempo (10s)'));
+        }, 10000);
+      });
+
+      // PASO 3: Función de guardado con verificación de abort
+      const saveWithAbort = async () => {
+        console.log('🚀 Iniciando operación de base de datos...');
+
+        let result;
+        try {
+          if (editingArticle) {
+            console.log('🔄 Actualizando artículo existente:', editingArticle.id);
+            result = await supabase
+              .from('articles')
+              .update(articleData)
+              .eq('id', editingArticle.id);
+            console.log('📤 Update enviado a Supabase');
+          } else {
+            console.log('➕ Creando nuevo artículo');
+            result = await supabase
+              .from('articles')
+              .insert([articleData]);
+            console.log('📤 Insert enviado a Supabase');
+          }
+
+          // Verificar si fue abortado
+          if (abortController.signal.aborted) {
+            console.log('🛑 Operación abortada por timeout');
+            throw new Error('Operación cancelada por timeout');
+          }
+
+          console.log('📨 Respuesta cruda de Supabase:', result);
+          return result;
+
+        } catch (dbError: any) {
+          console.error('💥 Error en operación de BD:', dbError);
+
+          // Si fue abortado, lanzar error específico
+          if (abortController.signal.aborted) {
+            throw new Error('Operación cancelada por timeout');
+          }
+
+          throw dbError;
+        }
+      };
+
+      // PASO 4: Ejecutar con timeout usando AbortController
+      console.log('⏳ Ejecutando guardado con timeout de 10 segundos...');
+
+      const result = await Promise.race([saveWithAbort(), timeoutPromise]);
+
+      // Limpiar timeout si se completó exitosamente
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        console.log('✅ Timeout limpiado - operación completada');
       }
 
-      if (error) throw error;
+      console.log('📦 Respuesta final procesada:', result);
+
+      if (result?.error) {
+        console.error('❌ Error en respuesta de Supabase:', result.error);
+        throw new Error(result.error.message || 'Error al guardar artículo');
+      }
 
       // Limpiar localStorage después de guardar exitosamente
       clearLocalStorage();
 
+      console.log('✅ Artículo guardado exitosamente');
       alert(editingArticle ? 'Artículo actualizado exitosamente' : 'Artículo publicado exitosamente');
       onSave();
       onClose();
       
     } catch (error: any) {
-      console.error('Error al guardar artículo:', error);
-      alert('Error al guardar artículo: ' + error.message);
+      console.error('❌ Error completo en handleSubmit:', error);
+
+      // Limpiar timeout si aún existe
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
+      // Manejo específico de errores
+      if (error.message?.includes('Timeout') || error.message?.includes('cancelada')) {
+        alert('⏰ El guardado tomó demasiado tiempo. Esto puede pasar al cambiar de pestaña.\n\nIntenta guardar nuevamente.');
+      } else if (error.message?.includes('JWT') || error.message?.includes('auth') || error.message?.includes('session')) {
+        alert('🔐 Error de sesión. Por favor, vuelve a iniciar sesión e intenta nuevamente.');
+      } else if (error.name === 'AbortError' || abortController.signal.aborted) {
+        alert('🛑 Operación cancelada. Intenta guardar nuevamente.');
+      } else {
+        alert('Error al guardar artículo: ' + error.message);
+      }
     } finally {
       setSaving(false);
+      console.log('🔄 Estado de guardado reseteado');
     }
   };
 
@@ -444,8 +536,8 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
               Categoría * {categories.length > 0 && `(${categories.length} disponibles)`}
             </label>
             <select
-              value={formData.category_id}
-              onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
               className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
               required
             >
@@ -453,7 +545,7 @@ export default function ArticleEditor({ onClose, onSave, editingArticle }: Artic
                 {categories.length === 0 ? 'Cargando categorías...' : 'Seleccionar categoría'}
               </option>
               {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
+                <option key={cat.slug} value={cat.slug}>
                   {cat.name}
                 </option>
               ))}

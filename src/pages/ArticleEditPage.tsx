@@ -15,7 +15,7 @@ type ArticleForm = {
   subtitle: string;
   content: string;
   excerpt: string;
-  category_id: string;
+  category: string; // Slug de la categoría
   image_url: string;
   is_featured: boolean;
   published_at: string | null;
@@ -24,7 +24,7 @@ type ArticleForm = {
 export default function ArticleEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, ensureSessionReady } = useAuth();
   const [categories] = useState<LocalCategory[]>(getAllCategories());
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -37,58 +37,19 @@ export default function ArticleEditPage() {
     subtitle: '',
     content: '',
     excerpt: '',
-    category_id: '',
+    category: '',
     image_url: '',
     is_featured: false,
     published_at: new Date().toISOString(),
   });
 
-  // Categorías cargadas desde archivo local - no requiere consulta a Supabase
-  console.log('📁 Usando categorías locales:', categories.length);
-
-  // 🔄 Verificar sesión cuando la página recibe foco (después de cambiar de pestaña)
+  // Redirigir si no hay usuario autenticado
   useEffect(() => {
-    const handleFocus = async () => {
-      console.log('👁️ Ventana enfocada, verificando sesión...');
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('❌ Error al verificar sesión:', error);
-          return;
-        }
-        
-        if (!session) {
-          console.warn('⚠️ Sesión perdida, redirigiendo al login...');
-          alert('Tu sesión ha expirado. Por favor, vuelve a iniciar sesión.');
-          navigate('/admin');
-          return;
-        }
-        
-        // Verificar si el token necesita refrescarse
-        const expiresAt = session.expires_at;
-        const now = Math.floor(Date.now() / 1000);
-        const timeToExpire = expiresAt ? expiresAt - now : Infinity;
-        
-        if (timeToExpire < 600) { // Menos de 10 minutos
-          console.log('🔄 Token próximo a expirar, refrescando preventivamente...');
-          const { error: refreshError } = await supabase.auth.refreshSession();
-          if (refreshError) {
-            console.error('❌ Error al refrescar sesión:', refreshError);
-          } else {
-            console.log('✅ Sesión refrescada preventivamente');
-          }
-        } else {
-          console.log(`✅ Sesión válida (${Math.floor(timeToExpire / 60)} minutos restantes)`);
-        }
-      } catch (error) {
-        console.error('❌ Error al verificar sesión:', error);
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [navigate]);
+    if (!user && !loading) {
+      console.warn('⚠️ Usuario no autenticado, redirigiendo al admin...');
+      navigate('/admin');
+    }
+  }, [user, loading, navigate]);
 
   const loadArticle = useCallback(async () => {
     try {
@@ -106,7 +67,7 @@ export default function ArticleEditPage() {
           subtitle: data.subtitle || '',
           content: data.content,
           excerpt: data.excerpt || '',
-          category_id: data.category_id || '',
+          category: data.category || '',
           image_url: data.image_url || '',
           is_featured: data.is_featured || false,
           published_at: data.published_at || null,
@@ -127,7 +88,7 @@ export default function ArticleEditPage() {
       navigate('/admin');
       return;
     }
-
+    
     if (id && id !== 'new') {
       loadArticle();
     } else {
@@ -291,106 +252,142 @@ export default function ArticleEditPage() {
       return;
     }
 
-    if (!formData.title || !formData.content || !formData.category_id) {
-      alert('Por favor completa título, contenido y categoría');
+    if (!formData.title || !formData.content) {
+      alert('Por favor completa título y contenido');
       return;
     }
+
+    // Crear AbortController para poder cancelar la operación
+    const abortController = new AbortController();
+    let timeoutId: NodeJS.Timeout;
 
     try {
       setSaving(true);
       console.log('💾 Iniciando guardado de artículo...');
 
-      // 🔐 VERIFICAR Y REFRESCAR SESIÓN ANTES DE GUARDAR
+      // PASO 1: Verificar y asegurar que la sesión esté lista
       console.log('🔐 Verificando sesión antes de guardar...');
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      const sessionReady = await ensureSessionReady();
       
-      if (sessionError) {
-        console.error('❌ Error al verificar sesión:', sessionError);
-        throw new Error('Error de sesión. Por favor, vuelve a iniciar sesión.');
+      if (!sessionReady) {
+        throw new Error('Error de autenticación. Vuelve a iniciar sesión.');
       }
 
-      if (!session) {
-        console.error('❌ No hay sesión activa');
-        throw new Error('Sesión expirada. Por favor, vuelve a iniciar sesión.');
-      }
+      console.log('✅ Sesión verificada y lista');
 
-      console.log('✅ Sesión activa confirmada:', session.user.email);
-
-      // Si el token está próximo a expirar (menos de 5 minutos), refrescarlo
-      const expiresAt = session.expires_at;
-      const now = Math.floor(Date.now() / 1000);
-      const timeToExpire = expiresAt ? expiresAt - now : Infinity;
-      
-      if (timeToExpire < 300) { // Menos de 5 minutos
-        console.log('⚠️ Token próximo a expirar, refrescando...');
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-        
-        if (refreshError) {
-          console.error('❌ Error al refrescar sesión:', refreshError);
-          throw new Error('No se pudo refrescar la sesión. Por favor, vuelve a iniciar sesión.');
-        }
-        
-        if (refreshData.session) {
-          console.log('✅ Sesión refrescada exitosamente');
-        }
-      } else {
-        console.log(`✅ Token válido por ${Math.floor(timeToExpire / 60)} minutos más`);
-      }
-
-      // Preparar datos del artículo
       const articleData = {
         title: formData.title,
         subtitle: formData.subtitle,
         content: formData.content,
         excerpt: formData.excerpt || formData.content.substring(0, 150) + '...',
-        category_id: formData.category_id,
+        category: formData.category || null,
         image_url: formData.image_url,
         is_featured: formData.is_featured,
         published_at: formData.published_at,
         author_id: user.id,
       };
 
-      console.log('📝 Guardando artículo en base de datos...');
+      console.log('📝 Preparando datos del artículo:', {
+        title: articleData.title,
+        category: articleData.category,
+        hasImage: !!articleData.image_url,
+        isFeatured: articleData.is_featured
+      });
 
-      let error;
-      if (id && id !== 'new') {
-        console.log('🔄 Actualizando artículo existente:', id);
-        const result = await supabase
-          .from('articles')
-          .update(articleData)
-          .eq('id', id);
-        error = result.error;
-      } else {
-        console.log('➕ Creando nuevo artículo');
-        const result = await supabase
-          .from('articles')
-          .insert([articleData]);
-        error = result.error;
+      // PASO 2: Configurar timeout de 10 segundos (más agresivo)
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          console.error('⏰ TIMEOUT: Cancelando operación después de 10 segundos');
+          abortController.abort();
+          reject(new Error('Timeout: El guardado tomó demasiado tiempo (10s)'));
+        }, 10000);
+      });
+
+      // PASO 3: Función de guardado con verificación de abort
+      const saveWithAbort = async () => {
+        console.log('🚀 Iniciando operación de base de datos...');
+
+        let result;
+        try {
+          if (id && id !== 'new') {
+            console.log('🔄 Actualizando artículo existente:', id);
+            result = await supabase
+              .from('articles')
+              .update(articleData)
+              .eq('id', id);
+            console.log('📤 Update enviado a Supabase');
+          } else {
+            console.log('➕ Creando nuevo artículo');
+            result = await supabase
+              .from('articles')
+              .insert([articleData]);
+            console.log('📤 Insert enviado a Supabase');
+          }
+
+          // Verificar si fue abortado
+          if (abortController.signal.aborted) {
+            console.log('🛑 Operación abortada por timeout');
+            throw new Error('Operación cancelada por timeout');
+          }
+
+          console.log('📨 Respuesta cruda de Supabase:', result);
+          return result;
+
+        } catch (dbError: any) {
+          console.error('💥 Error en operación de BD:', dbError);
+
+          // Si fue abortado, lanzar error específico
+          if (abortController.signal.aborted) {
+            throw new Error('Operación cancelada por timeout');
+          }
+
+          throw dbError;
+        }
+      };
+
+      // PASO 4: Ejecutar con timeout usando AbortController
+      console.log('⏳ Ejecutando guardado con timeout de 10 segundos...');
+
+      const result = await Promise.race([saveWithAbort(), timeoutPromise]);
+
+      // Limpiar timeout si se completó exitosamente
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        console.log('✅ Timeout limpiado - operación completada');
       }
 
-      if (error) {
-        console.error('❌ Error de Supabase:', error);
-        throw error;
+      console.log('📦 Respuesta final procesada:', result);
+
+      if (result?.error) {
+        console.error('❌ Error en respuesta de Supabase:', result.error);
+        throw new Error(result.error.message || 'Error al guardar artículo');
       }
 
       console.log('✅ Artículo guardado exitosamente');
       alert('Artículo guardado correctamente');
       navigate('/admin');
+
     } catch (error: any) {
-      console.error('❌ Error al guardar artículo:', error);
-      
-      // Mensaje de error más descriptivo
-      let errorMessage = 'Error desconocido';
-      if (error.message) {
-        errorMessage = error.message;
-      } else if (error.code) {
-        errorMessage = `Error código: ${error.code}`;
+      console.error('❌ Error completo en handleSubmit:', error);
+
+      // Limpiar timeout si aún existe
+      if (timeoutId) {
+        clearTimeout(timeoutId);
       }
-      
-      alert(`Error al guardar artículo: ${errorMessage}\n\nSi el problema persiste, intenta cerrar sesión y volver a entrar.`);
+
+      // Manejo específico de errores
+      if (error.message?.includes('Timeout') || error.message?.includes('cancelada')) {
+        alert('⏰ El guardado tomó demasiado tiempo. Esto puede pasar al cambiar de pestaña.\n\nIntenta guardar nuevamente.');
+      } else if (error.message?.includes('JWT') || error.message?.includes('auth') || error.message?.includes('session')) {
+        alert('🔐 Error de sesión. Por favor, vuelve a iniciar sesión e intenta nuevamente.');
+      } else if (error.name === 'AbortError' || abortController.signal.aborted) {
+        alert('🛑 Operación cancelada. Intenta guardar nuevamente.');
+      } else {
+        alert(`❌ Error al guardar artículo: ${error.message}`);
+      }
     } finally {
       setSaving(false);
-      console.log('🔓 Guardado finalizado');
+      console.log('🔄 Estado de guardado reseteado');
     }
   };
 
@@ -462,17 +459,16 @@ export default function ArticleEditPage() {
           {/* Categoría */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Categoría *
+              Categoría (opcional)
             </label>
             <select
-              value={formData.category_id}
-              onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
               className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-              required
             >
-              <option value="">Seleccionar categoría</option>
+              <option value="">Sin categoría</option>
               {categories.map((category) => (
-                <option key={category.id} value={category.id}>
+                <option key={category.slug} value={category.slug}>
                   {category.name}
                 </option>
               ))}

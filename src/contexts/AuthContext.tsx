@@ -1,113 +1,87 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User } from '@supabase/supabase-js';
+import { User, Session } from '@supabase/supabase-js';
 import { supabase, Profile } from '../lib/supabase';
 
 type AuthContextType = {
   user: User | null;
   profile: Profile | null;
+  session: Session | null;
   loading: boolean;
   isAdmin: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  ensureSessionReady: () => Promise<boolean>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const SESSION_STORAGE_KEY = 'supabase_session_backup';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // Verificar sesión inicial
-    const initializeAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user) {
-          setUser(session.user);
-          await loadProfile(session.user.id);
-        }
-      } catch (error) {
-        console.error('Error al inicializar autenticación:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initializeAuth();
-
-    // Escuchar cambios de autenticación
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setUser(session?.user ?? null);
+  const updateUserPresence = async (online: boolean = true) => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase.rpc('update_user_presence', {
+        user_id: user.id,
+        online_status: online
+      });
       
-      if (session?.user) {
-        await loadProfile(session.user.id);
+      if (error) {
+        console.error('❌ Error al actualizar presencia:', error);
       } else {
-        setProfile(null);
+        console.log(`✅ Presencia actualizada: ${online ? 'online' : 'offline'}`);
       }
-    });
+    } catch (error) {
+      console.error('❌ Error en updateUserPresence:', error);
+    }
+  };
 
-    // 🔄 LISTENER PARA CAMBIO DE PESTAÑA/VENTANA
-    // Detectar cuando el usuario vuelve a la pestaña y refrescar sesión
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible') {
-        console.log('👁️ Pestaña visible nuevamente, verificando sesión...');
-        
-        try {
-          const { data: { session }, error } = await supabase.auth.getSession();
-          
-          if (error) {
-            console.error('❌ Error al verificar sesión:', error);
-            return;
-          }
-          
-          if (!session) {
-            console.warn('⚠️ No hay sesión activa después de cambiar de pestaña');
-            setUser(null);
-            setProfile(null);
-            return;
-          }
-
-          // Verificar si el token necesita refrescarse
-          const expiresAt = session.expires_at;
-          const now = Math.floor(Date.now() / 1000);
-          const timeToExpire = expiresAt ? expiresAt - now : Infinity;
-          
-          console.log(`⏱️ Token expira en ${Math.floor(timeToExpire / 60)} minutos`);
-          
-          // Si expira en menos de 10 minutos, refrescar
-          if (timeToExpire < 600) {
-            console.log('🔄 Refrescando sesión automáticamente...');
-            const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-            
-            if (refreshError) {
-              console.error('❌ Error al refrescar sesión:', refreshError);
-            } else if (refreshData.session) {
-              console.log('✅ Sesión refrescada exitosamente');
-              setUser(refreshData.session.user);
-              await loadProfile(refreshData.session.user.id);
-            }
-          } else {
-            console.log('✅ Sesión válida, no requiere refresh');
-          }
-        } catch (error) {
-          console.error('❌ Error al verificar sesión al volver a pestaña:', error);
-        }
+  const markUserOnline = async () => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase.rpc('update_user_online', {
+        user_id: user.id
+      });
+      
+      if (error) {
+        console.error('❌ Error al marcar usuario online:', error);
+      } else {
+        console.log('✅ Usuario marcado como online');
       }
-    };
+    } catch (error) {
+      console.error('❌ Error en markUserOnline:', error);
+    }
+  };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      subscription.unsubscribe();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
+  const markUserOffline = async () => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase.rpc('mark_user_offline', {
+        user_id: user.id
+      });
+      
+      if (error) {
+        console.error('❌ Error al marcar usuario offline:', error);
+      } else {
+        console.log('✅ Usuario marcado como offline');
+      }
+    } catch (error) {
+      console.error('❌ Error en markUserOffline:', error);
+    }
+  };
 
   const loadProfile = async (userId: string) => {
     try {
+      console.log('👤 Cargando perfil del usuario:', userId);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -121,6 +95,209 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(null);
     }
   };
+
+  useEffect(() => {
+    let mounted = true;
+
+    // Inicializar autenticación con rehidratación de sesión
+    const initializeAuth = async () => {
+      try {
+        console.log('🔄 Inicializando autenticación...');
+
+        // 1. Intentar rehidratar sesión desde localStorage backup
+        const storedSession = localStorage.getItem(SESSION_STORAGE_KEY);
+        
+        if (storedSession) {
+          console.log('💾 Sesión encontrada en backup, rehidratando...');
+          try {
+            const parsedSession = JSON.parse(storedSession);
+            
+            // Intentar establecer la sesión con Supabase
+            const { data, error } = await supabase.auth.setSession({
+              access_token: parsedSession.access_token,
+              refresh_token: parsedSession.refresh_token
+            });
+
+            if (error) {
+              console.error('❌ Error al rehidratar sesión:', error);
+              localStorage.removeItem(SESSION_STORAGE_KEY);
+            } else if (data.session) {
+              console.log('✅ Sesión rehidratada exitosamente');
+              if (mounted) {
+                setSession(data.session);
+                setUser(data.session.user);
+                await loadProfile(data.session.user.id);
+                await markUserOnline();
+              }
+            }
+          } catch (error) {
+            console.error('❌ Error al parsear sesión almacenada:', error);
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+          }
+        } else {
+          // 2. Si no hay backup, intentar obtener sesión existente de Supabase
+          console.log('🔍 Verificando sesión existente...');
+          const { data: { session: existingSession } } = await supabase.auth.getSession();
+          
+          if (existingSession?.user && mounted) {
+            console.log('✅ Sesión existente encontrada');
+            setSession(existingSession);
+            setUser(existingSession.user);
+            await loadProfile(existingSession.user.id);
+            await markUserOnline();
+            
+            // Guardar en backup
+            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(existingSession));
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error al inicializar autenticación:', error);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    initializeAuth();
+
+    /**
+     * Listener centralizado para cambios de estado de autenticación
+     * Guarda la sesión en localStorage para persistencia
+     */
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, newSession) => {
+        console.log(`🔐 Evento de autenticación: ${event}`);
+
+        if (!mounted) return;
+
+        // Actualizar sesión y usuario basado en la sesión
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+
+        // Guardar o eliminar sesión en localStorage según el evento
+        if (newSession) {
+          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(newSession));
+          console.log('💾 Sesión guardada en backup');
+          
+          // Actualizar perfil si hay usuario
+          await loadProfile(newSession.user.id);
+
+          // Actualizar presencia según el evento
+          if (event === 'SIGNED_IN') {
+            console.log('🟢 Usuario conectado');
+            await markUserOnline();
+          } else if (event === 'TOKEN_REFRESHED') {
+            console.log('🔄 Token refrescado automáticamente');
+            await updateUserPresence(true);
+          } else if (event === 'USER_UPDATED') {
+            console.log('👤 Usuario actualizado');
+          }
+        } else {
+          // Sin sesión, limpiar backup
+          localStorage.removeItem(SESSION_STORAGE_KEY);
+          setProfile(null);
+          
+          if (event === 'SIGNED_OUT') {
+            console.log('🔴 Usuario desconectado');
+          }
+        }
+
+        // Log de eventos para debugging
+        if (import.meta.env.DEV) {
+          const expiresAt = newSession?.expires_at;
+          const now = Math.floor(Date.now() / 1000);
+          const timeToExpire = expiresAt ? expiresAt - now : undefined;
+          console.log('📊 Estado de sesión:', {
+            evento: event,
+            usuarioLogueado: !!newSession?.user,
+            tiempoExpiracion: timeToExpire
+              ? `${Math.floor(timeToExpire / 60)} minutos`
+              : 'N/A',
+          });
+        }
+
+        // Finalizar carga después del primer evento si aún está cargando
+        if (loading) {
+          setLoading(false);
+        }
+      }
+    );
+
+    // Listener para cuando la pestaña vuelve a ser visible
+    // Refresca la sesión y actualiza presencia
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        console.log('👁️ Pestaña visible nuevamente');
+        
+        // Pequeño delay para dar tiempo a que Supabase termine operaciones pendientes
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Solo verificar sesión, no refrescar automáticamente para evitar conflictos
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        
+        if (currentSession && mounted) {
+          console.log('✅ Sesión activa detectada');
+          
+          // Actualizar presencia si hay usuario
+          if (user) {
+            await updateUserPresence(true);
+          }
+          
+          // Solo actualizar estado si la sesión cambió significativamente
+          if (currentSession.access_token !== session?.access_token) {
+            console.log('🔄 Sesión actualizada');
+            setSession(currentSession);
+            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(currentSession));
+          }
+        } else if (!currentSession && session) {
+          // Sesión perdida, intentar recuperar desde backup
+          console.warn('⚠️ Sesión perdida, intentando recuperar...');
+          const storedSession = localStorage.getItem(SESSION_STORAGE_KEY);
+          
+          if (storedSession) {
+            try {
+              const parsedSession = JSON.parse(storedSession);
+              const { data, error } = await supabase.auth.setSession({
+                access_token: parsedSession.access_token,
+                refresh_token: parsedSession.refresh_token
+              });
+              
+              if (data.session && mounted) {
+                console.log('✅ Sesión recuperada exitosamente');
+                setSession(data.session);
+                setUser(data.session.user);
+              } else if (error) {
+                console.error('❌ No se pudo recuperar la sesión:', error);
+                localStorage.removeItem(SESSION_STORAGE_KEY);
+              }
+            } catch (error) {
+              console.error('❌ Error al recuperar sesión:', error);
+            }
+          }
+        }
+      }
+      // Removido el else para 'hidden' para evitar logs innecesarios
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Heartbeat para mantener presencia online cada 5 minutos
+    const heartbeatInterval = setInterval(async () => {
+      if (user && mounted) {
+        console.log('💓 Heartbeat: actualizando presencia');
+        await updateUserPresence(true);
+      }
+    }, 5 * 60 * 1000); // Cada 5 minutos
+
+    // Cleanup
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(heartbeatInterval);
+    };
+  }, []); // Solo ejecutar una vez al montar
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -163,23 +340,76 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     try {
+      // Marcar usuario como offline antes de cerrar sesión
+      if (user) {
+        await markUserOffline();
+      }
+      
       await supabase.auth.signOut();
+      
+      // Limpiar estado y backup
       setUser(null);
       setProfile(null);
+      setSession(null);
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      
+      console.log('👋 Sesión cerrada y datos limpiados');
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
       throw error;
     }
   };
 
+  // Hook personalizado para verificar sesión antes de operaciones críticas
+  const ensureSessionReady = async (): Promise<boolean> => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('❌ Error verificando sesión:', error);
+        return false;
+      }
+      
+      if (!session) {
+        console.error('❌ No hay sesión activa');
+        return false;
+      }
+      
+      // Verificar que el token no esté próximo a expirar (menos de 5 minutos)
+      const now = Math.floor(Date.now() / 1000);
+      const timeToExpire = session.expires_at - now;
+      
+      if (timeToExpire < 300) { // 5 minutos
+        console.warn('⚠️ Token próximo a expirar, intentando refrescar...');
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (refreshError || !refreshData.session) {
+          console.error('❌ Error refrescando sesión:', refreshError);
+          return false;
+        }
+        
+        console.log('✅ Sesión refrescada exitosamente');
+        setSession(refreshData.session);
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(refreshData.session));
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Error en ensureSessionReady:', error);
+      return false;
+    }
+  };
+
   const value = {
     user,
     profile,
+    session,
     loading,
     isAdmin: profile?.is_admin || false,
     signIn,
     signUp,
     signOut,
+    ensureSessionReady,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

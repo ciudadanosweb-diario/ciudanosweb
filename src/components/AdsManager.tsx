@@ -153,11 +153,11 @@ export default function AdsManager() {
       }, 1000);
     } catch (error) {
       console.error('💥 Error completo en subida de imagen:', {
-        message: error.message,
-        name: error.name,
-        stack: error.stack,
-        code: error.code,
-        details: error.details
+        message: (error as any).message,
+        name: (error as any).name,
+        stack: (error as any).stack,
+        code: (error as any).code,
+        details: (error as any).details
       });
       alert('Error al subir la imagen. Intenta de nuevo.');
       setUploading(false);

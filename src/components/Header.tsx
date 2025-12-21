@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 export default function Header() {
-  const { user, signOut, authRefreshing } = useAuth();
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const isAdminPage = location.pathname === '/admin';
@@ -21,14 +21,6 @@ export default function Header() {
 
   return (
     <header className="bg-[linear-gradient(to_bottom,_#4ade80_0%,_#ffffff_30%,_#ffffff_80%,_#16a34a_100%)] text-gray-800 shadow-lg relative">
-      {/* Banner global de refresco de sesión */}
-      {authRefreshing && (
-        <div className="fixed top-0 left-0 right-0 z-50">
-          <div className="bg-amber-100 text-amber-800 text-sm py-2 text-center shadow">
-            Recuperando sesión…
-          </div>
-        </div>
-      )}
       <div className="container mx-auto px-4 py-3 md:py-6">
         <div className="flex items-center justify-between gap-2 md:gap-0">
           <div className="flex items-center space-x-2 md:space-x-6 relative">

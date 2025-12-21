@@ -1,7 +1,7 @@
 import { Clock, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Article } from '../lib/supabase';
-import { getCategoryById } from '../lib/categories';
+import { getCategoryBySlug } from '../lib/categories';
 
 type ArticleCardProps = {
   article: Article;
@@ -10,7 +10,7 @@ type ArticleCardProps = {
 
 export default function ArticleCard({ article, onClick }: ArticleCardProps) {
   const navigate = useNavigate();
-  const category = article.category_id ? getCategoryById(article.category_id) : null;
+  const category = article.category ? getCategoryBySlug(article.category) : null;
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('es-ES', {

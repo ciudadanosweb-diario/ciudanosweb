@@ -5,7 +5,7 @@ import { supabase, Article } from '../lib/supabase';
 import SocialShare from '../components/SocialShare';
 import MDEditor from '@uiw/react-md-editor';
 import '@uiw/react-markdown-preview/markdown.css';
-import { getCategoryById } from '../lib/categories';
+import { getCategoryBySlug } from '../lib/categories';
 
 export default function ArticleDetail() {
   const { id } = useParams<{ id: string }>();
@@ -14,7 +14,7 @@ export default function ArticleDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
-  const category = article?.category_id ? getCategoryById(article.category_id) : null;
+  const category = article?.category ? getCategoryBySlug(article.category) : null;
 
   useEffect(() => {
     loadArticle();

@@ -42,7 +42,7 @@ function App() {
       .order('published_at', { ascending: false });
 
     if (selectedCategory) {
-      query = query.eq('category_id', selectedCategory);
+      query = query.eq('category', selectedCategory);
     }
 
     const { data } = await query;

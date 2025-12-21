@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, RefreshCw, AlertCircle, Settings, FolderTree } from 'lucide-react';
-import { supabase, Article, Category } from '../lib/supabase';
+import { Plus, Edit, RefreshCw, AlertCircle, Settings } from 'lucide-react';
+import { supabase, Article } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import AdsManager from './AdsManager';
-import CategoryManager from './CategoryManager';
-import { getCategoryById } from '../lib/categories';
+import { getCategoryBySlug } from '../lib/categories';
 
 export default function AdminPanel({ onClose: _onClose }: { onClose?: () => void }) {
   const { user: _user } = useAuth();
@@ -15,7 +14,6 @@ export default function AdminPanel({ onClose: _onClose }: { onClose?: () => void
   const [error, setError] = useState<string | null>(null);
 
   const [showAdsManager, setShowAdsManager] = useState(false);
-  const [showCategoryManager, setShowCategoryManager] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -78,9 +76,9 @@ export default function AdminPanel({ onClose: _onClose }: { onClose?: () => void
     }
   };
 
-  const getCategoryName = (categoryId: string | undefined) => {
-    if (!categoryId) return 'Sin categoría';
-    const category = getCategoryById(categoryId);
+  const getCategoryName = (categorySlug: string | undefined) => {
+    if (!categorySlug) return 'Sin categoría';
+    const category = getCategoryBySlug(categorySlug);
     return category?.name || 'Sin categoría';
   };
 
@@ -109,13 +107,6 @@ export default function AdminPanel({ onClose: _onClose }: { onClose?: () => void
               >
                 <RefreshCw className="w-4 h-4" />
                 Actualizar
-              </button>
-              <button
-                onClick={() => setShowCategoryManager(true)}
-                className="px-4 py-2 border rounded-lg hover:bg-gray-50 flex items-center gap-2"
-              >
-                <FolderTree className="w-4 h-4" />
-                Categorías
               </button>
               <button
                 onClick={() => setShowAdsManager(!showAdsManager)}
@@ -197,7 +188,7 @@ export default function AdminPanel({ onClose: _onClose }: { onClose?: () => void
                           <p className="text-gray-600 text-sm mb-2">{article.subtitle}</p>
                         )}
                         <div className="flex items-center gap-4 text-sm text-gray-500">
-                          <span>📁 {getCategoryName(article.category_id)}</span>
+                          <span>📁 {getCategoryName(article.category)}</span>
                           <span>📅 {new Date(article.created_at).toLocaleDateString()}</span>
                         </div>
                       </div>
@@ -231,14 +222,6 @@ export default function AdminPanel({ onClose: _onClose }: { onClose?: () => void
           </div>
         )}
       </div>
-
-      {/* Gestor de categorías */}
-      {showCategoryManager && (
-        <CategoryManager
-          onClose={() => setShowCategoryManager(false)}
-          onUpdate={loadData}
-        />
-      )}
     </div>
   );
 }

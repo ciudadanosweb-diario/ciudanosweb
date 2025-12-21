@@ -18,10 +18,13 @@ function escapeHtml(str) {
 }
 
 export async function handler(event, context) {
-  // Obtener el ID del artículo de los parámetros
-  const articleId = event.queryStringParameters?.id;
+  console.log('Event path:', event.path);
+  // Obtener el ID del artículo del path (para rewrites desde _redirects)
+  const pathParts = event.path.split('/');
+  const articleId = pathParts[3]; // /.netlify/functions/og-tags/:id
+  console.log('Article ID from path:', articleId);
 
-  if (!articleId) {
+  if (!articleId || articleId === 'og-tags') {
     return {
       statusCode: 400,
       body: 'Missing article ID'

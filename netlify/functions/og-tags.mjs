@@ -18,6 +18,16 @@ function truncateText(text, maxLength = 160) {
   return text.substring(0, maxLength).replace(/\s+\S*$/, '') + '...';
 }
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export async function handler(event, context) {
   // Obtener el ID del artículo del path (para rewrites desde _redirects)
   const pathParts = event.path.split('/');
@@ -40,9 +50,6 @@ export async function handler(event, context) {
   // Detectar si es un bot
   const userAgent = event.headers['user-agent'] || '';
   const isBot = /facebookexternalhit|Facebot|Twitterbot|LinkedInBot|WhatsApp|TelegramBot|Slackbot|SkypeUriPreview|vkShare|Pinterest|Discordbot|Google-Structured-Data-Testing-Tool/i.test(userAgent);
-  
-  console.log(`[OG-Tags] User-Agent: ${userAgent}`);
-  console.log(`[OG-Tags] Is Bot: ${isBot}`);
 
   // Obtener la URL base del sitio
   const siteUrl = process.env.URL || 'https://ciudadanos-web.com';

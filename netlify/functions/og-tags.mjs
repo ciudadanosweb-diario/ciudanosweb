@@ -95,7 +95,7 @@ export async function handler(event, context) {
     // Si el artículo no tiene imagen, usar imagen por defecto
     const imageUrl = article.image_url 
       ? `${siteUrl}/.netlify/functions/article-image/${article.id}`
-      : 'https://via.placeholder.com/1200x630/e5e7eb/374151?text=Ciudadanos+Digital';
+      : 'https://picsum.photos/1200/630?random=ciudadanos';
 
     const title = article.title || 'Ciudadanos Digital';
     const description = article.excerpt || article.subtitle || truncateText(stripHtml(article.content)) || article.title || '';

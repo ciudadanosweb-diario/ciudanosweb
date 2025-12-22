@@ -48,16 +48,21 @@ export async function handler(event, context) {
       };
     }
 
-    // Descargar imagen base (article.image_url ya es la URL completa de Supabase)
+    // Descargar imagen base (normalizar a 'imagenes/' primero, luego intentar 'articles/')
     let imageUrl = article.image_url;
     
-    console.log('Trying image URL:', imageUrl);
+    // Normalizar a 'imagenes/' si contiene '/article-images/'
+    if (imageUrl.includes('/article-images/')) {
+      imageUrl = imageUrl.replace(/\/article-images\/[^\/]+\//, '/article-images/imagenes/');
+    }
+    
+    console.log('Trying normalized URL (imagenes):', imageUrl);
     let imageResponse = await fetch(imageUrl);
     
-    // Si falla y la URL contiene '/imagenes/', intentar con '/articles/'
+    // Si falla, intentar con 'articles/' en lugar de 'imagenes/'
     if (!imageResponse.ok && imageUrl.includes('/imagenes/')) {
       const altImageUrl = imageUrl.replace('/imagenes/', '/articles/');
-      console.log('Trying alternative URL:', altImageUrl);
+      console.log('Trying alternative URL (articles):', altImageUrl);
       imageResponse = await fetch(altImageUrl);
       if (imageResponse.ok) {
         imageUrl = altImageUrl;

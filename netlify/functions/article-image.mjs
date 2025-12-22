@@ -9,9 +9,8 @@ const supabase = supabaseUrl && supabaseKey
 
 export async function handler(event, context) {
   try {
-    // Obtener el ID del artículo del path
-    const pathParts = event.path.split('/');
-    const articleId = pathParts[4]; // /.netlify/functions/article-image/:id
+    // Obtener el ID del artículo de los parámetros
+    const articleId = event.queryStringParameters?.id;
 
     if (!articleId) {
       return {

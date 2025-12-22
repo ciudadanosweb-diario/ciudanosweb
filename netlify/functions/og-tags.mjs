@@ -94,7 +94,7 @@ export async function handler(event, context) {
       };
     }
 
-    const shareUrl = `${siteUrl}/#/article/${article.id}`; // URL para compartir (con hash para HashRouter)
+    const shareUrl = `${siteUrl}/article/${article.id}`; // URL para compartir (sin hash, para que Facebook acceda a la función)
     
     // Asegurar URL absoluta para la imagen con overlays
     const imageUrl = `${siteUrl}/.netlify/functions/article-image/${article.id}`;

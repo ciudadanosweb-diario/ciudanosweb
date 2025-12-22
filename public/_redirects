@@ -4,10 +4,10 @@
 /article-meta  /.netlify/functions/article-meta  200
 
 # Rutas de imágenes de artículos con overlays
-/article-image/:id  /.netlify/functions/article-image/:id  200
+/article-image/*  /.netlify/functions/article-image/:splat  200
 
 # Rutas de artículos van a la función serverless para meta tags
-/article/:id  /.netlify/functions/og-tags/:id  200
+/article/*  /.netlify/functions/og-tags/:splat  200
 
 # Todas las demás rutas van al index.html (SPA)
 /*    /index.html   200

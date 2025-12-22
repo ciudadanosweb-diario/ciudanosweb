@@ -31,7 +31,7 @@ function escapeHtml(str) {
 export async function handler(event, context) {
   // Obtener el ID del artículo del path (para rewrites desde _redirects)
   const pathParts = event.path.split('/');
-  const articleId = pathParts[2]; // /article/:id -> ['', 'article', ':id']
+  const articleId = pathParts[4]; // /.netlify/functions/og-tags/:id
 
   if (!articleId || articleId === 'og-tags') {
     return {

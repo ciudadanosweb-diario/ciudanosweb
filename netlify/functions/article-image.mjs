@@ -11,7 +11,7 @@ export async function handler(event, context) {
   try {
     // Obtener el ID del artículo del path
     const pathParts = event.path.split('/');
-    const articleId = pathParts[3]; // /.netlify/functions/article-image/:id
+    const articleId = pathParts[4]; // /.netlify/functions/article-image/:id
 
     if (!articleId) {
       return {

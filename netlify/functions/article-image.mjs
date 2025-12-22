@@ -11,7 +11,7 @@ export async function handler(event, context) {
   try {
     // Obtener el ID del artículo del path
     const pathParts = event.path.split('/');
-    const articleId = pathParts[2]; // /article-image/:id
+    const articleId = pathParts[pathParts.length - 1]; // Último segmento del path
 
     if (!articleId) {
       return {

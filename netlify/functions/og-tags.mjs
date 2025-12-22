@@ -29,14 +29,30 @@ function escapeHtml(str) {
 }
 
 export async function handler(event, context) {
+  // Detectar si es un bot de redes sociales
+  const userAgent = event.headers['user-agent'] || '';
+  const isBot = /facebook|twitter|linkedin|whatsapp|telegram|discord|slack/i.test(userAgent) ||
+                /bot|crawler|spider|scraper/i.test(userAgent);
+
   // Obtener el ID del artículo del path (para rewrites desde _redirects)
   const pathParts = event.path.split('/');
-  const articleId = pathParts[2]; // /article/:id
+  const articleId = pathParts[pathParts.length - 1]; // Último segmento del path
 
   if (!articleId) {
     return {
       statusCode: 400,
       body: 'Missing article ID'
+    };
+  }
+
+  // Si no es un bot, redirigir a la URL con hash para que cargue la SPA
+  if (!isBot) {
+    const siteUrl = process.env.URL || 'https://ciudanosweb.netlify.app';
+    return {
+      statusCode: 302,
+      headers: {
+        'Location': `${siteUrl}/#/article/${articleId}`
+      }
     };
   }
 
@@ -73,7 +89,7 @@ export async function handler(event, context) {
       };
     }
 
-    const shareUrl = `${siteUrl}/#/article/${article.id}`; // URL para compartir (sin hash, para que Facebook acceda a la función)
+    const shareUrl = `${siteUrl}/article/${article.id}`; // URL para compartir (sin hash, para que coincida con la URL scrapead)
     
     // Asegurar URL absoluta para la imagen con overlays
     const imageUrl = `${siteUrl}/.netlify/functions/article-image/${article.id}`;

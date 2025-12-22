@@ -2,13 +2,14 @@ import React from 'react';
 import { Share2, Facebook, Twitter, Linkedin, MessageCircle, Link as LinkIcon, X, Eye } from 'lucide-react';
 
 type SocialShareProps = {
-  url: string;
+  url: string; // URL para compartir (sin hash, para bots)
+  displayUrl?: string; // URL para mostrar/copiar (con hash, para humanos)
   title: string;
   description?: string;
   imageUrl?: string;
 };
 
-export default function SocialShare({ url, title, description, imageUrl }: SocialShareProps) {
+export default function SocialShare({ url, displayUrl, title, description, imageUrl }: SocialShareProps) {
   const [showMenu, setShowMenu] = React.useState(false);
   const [showPreview, setShowPreview] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
@@ -79,7 +80,7 @@ export default function SocialShare({ url, title, description, imageUrl }: Socia
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(displayUrl || url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
@@ -254,7 +255,7 @@ export default function SocialShare({ url, title, description, imageUrl }: Socia
                   )}
                   <div className="p-4">
                     <p className="text-xs text-gray-500 uppercase mb-1">
-                      {new URL(url).hostname}
+                      {new URL(displayUrl || url).hostname}
                     </p>
                     <h4 className="font-bold text-lg text-gray-900 mb-1 line-clamp-2">
                       {title}

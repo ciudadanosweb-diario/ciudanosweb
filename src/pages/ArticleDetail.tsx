@@ -204,6 +204,7 @@ export default function ArticleDetail() {
               <div className="ml-auto">
                 <SocialShare
                   url={`${window.location.origin}/article/${id}`}
+                  displayUrl={window.location.href}
                   title={article.title}
                   description={article.excerpt || article.subtitle}
                   imageUrl={article.image_url ? 
@@ -211,7 +212,6 @@ export default function ArticleDetail() {
                     undefined
                   }
                 />
-                {console.log('Sharing URL:', `${window.location.origin}/article/${id}`, 'Article image:', article.image_url)}
               </div>
             </div>
 

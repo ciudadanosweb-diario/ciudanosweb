@@ -91,7 +91,7 @@ export async function handler(event, context) {
       };
     }
 
-    const shareUrl = `${siteUrl}/#/article/${article.id}`; // URL canónica con hash para SPA
+    const shareUrl = `${siteUrl}/article/${article.id}`; // URL canónica sin hash
     
     // Usar la imagen original del artículo para previews
     let imageUrl = article.image_url;

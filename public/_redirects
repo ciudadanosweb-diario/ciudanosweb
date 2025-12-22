@@ -1,5 +1,8 @@
 # Redirecciones para Netlify
 
+# API para meta tags
+/article-meta  /.netlify/functions/article-meta  200
+
 # Rutas de imágenes de artículos con overlays
 /article-image/:id  /.netlify/functions/article-image/:id  200
 

@@ -25,6 +25,50 @@
     <meta name="twitter:title" content="Ciudadanos Digital - Noticias" />
     <meta name="twitter:description" content="Portal de noticias ciudadanas - Mantente informado con las últimas noticias de La Banda y Santiago del Estero" />
     <meta name="twitter:image" content="https://ciudadanos-web.com/og-default.jpg" />
+    
+    <script>
+      // Actualizar meta tags dinámicos para artículos
+      (function() {
+        var hash = window.location.hash;
+        if (hash && hash.indexOf('#/article/') === 0) {
+          var articleId = hash.split('/')[2];
+          if (articleId) {
+            fetch('/article-meta?id=' + encodeURIComponent(articleId))
+              .then(function(response) {
+                return response.json();
+              })
+              .then(function(meta) {
+                // Actualizar title
+                document.title = meta.title;
+                
+                // Actualizar meta description
+                var descMeta = document.querySelector('meta[name="description"]');
+                if (descMeta) descMeta.setAttribute('content', meta.description);
+                
+                // Actualizar Open Graph
+                updateMeta('property', 'og:type', meta.og.type);
+                updateMeta('property', 'og:title', meta.og.title);
+                updateMeta('property', 'og:description', meta.og.description);
+                updateMeta('property', 'og:image', meta.og.image);
+                updateMeta('property', 'og:url', meta.og.url);
+                
+                // Actualizar Twitter
+                updateMeta('name', 'twitter:title', meta.twitter.title);
+                updateMeta('name', 'twitter:description', meta.twitter.description);
+                updateMeta('name', 'twitter:image', meta.twitter.image);
+                
+                function updateMeta(attr, value, content) {
+                  var meta = document.querySelector('meta[' + attr + '="' + value + '"]');
+                  if (meta) meta.setAttribute('content', content);
+                }
+              })
+              .catch(function(error) {
+                console.error('Error loading meta:', error);
+              });
+          }
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

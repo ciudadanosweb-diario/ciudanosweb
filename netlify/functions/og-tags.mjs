@@ -47,29 +47,8 @@ export async function handler(event, context) {
     };
   }
 
-  // Detectar si es un bot
-  const userAgent = event.headers['user-agent'] || '';
-  const isBot = /facebookexternalhit|Facebot|Twitterbot|LinkedInBot|WhatsApp|TelegramBot|Slackbot|SkypeUriPreview|vkShare|Pinterest|Discordbot|Google-Structured-Data-Testing-Tool/i.test(userAgent);
-
   // Obtener la URL base del sitio
   const siteUrl = process.env.URL || 'https://ciudadanos-web.com';
-  const articleUrl = `${siteUrl}/#/article/${articleId}`;
-  
-  // Si no es un bot, redirigir directamente a la URL con hash
-  if (!isBot) {
-    return {
-      statusCode: 302,
-      headers: {
-        'Location': articleUrl,
-        'Cache-Control': 'no-cache'
-      },
-      body: ''
-    };
-  }
-
-  // Si es un bot, generar HTML con meta tags
-  console.log(`[OG-Tags] Bot detectado: ${userAgent}`);
-  console.log(`[OG-Tags] Sirviendo meta tags para artículo: ${articleId}`);
 
   try {
     // Obtener el artículo de Supabase
@@ -94,7 +73,7 @@ export async function handler(event, context) {
       };
     }
 
-    const shareUrl = `${siteUrl}/article/${article.id}`; // URL para compartir (sin hash, para que Facebook acceda a la función)
+    const shareUrl = `${siteUrl}/#/article/${article.id}`; // URL para compartir (sin hash, para que Facebook acceda a la función)
     
     // Asegurar URL absoluta para la imagen con overlays
     const imageUrl = `${siteUrl}/.netlify/functions/article-image/${article.id}`;
@@ -142,12 +121,12 @@ export async function handler(event, context) {
       <h1>${escapeHtml(title)}</h1>
       <p>${escapeHtml(description)}</p>
       ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(title)}" style="max-width: 100%;" />` : ''}
-      <p><a href="${escapeHtml(articleUrl)}">Ver artículo completo</a></p>
+      <p><a href="/#/article/${articleId}">Ver artículo completo</a></p>
     </noscript>
     <script>
-      // Redireccionar para usuarios humanos que lleguen aquí
+      // Redireccionar para usuarios humanos
       setTimeout(function() {
-        window.location.href = '${articleUrl}';
+        window.location.href = '/#/article/${articleId}';
       }, 100);
     </script>
   </body>

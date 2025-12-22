@@ -1,11 +1,5 @@
 # Redirecciones para Netlify
 
-# API para meta tags
-/article-meta  /.netlify/functions/article-meta  200
-
-# Rutas de imágenes de artículos con overlays
-/article-image/*  /.netlify/functions/article-image  200
-
 # Rutas de artículos van a la función serverless para meta tags
 /article/*  /.netlify/functions/og-tags  200
 

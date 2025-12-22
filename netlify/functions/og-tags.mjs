@@ -91,8 +91,9 @@ export async function handler(event, context) {
 
     const shareUrl = `${siteUrl}/article/${article.id}`; // URL para compartir (sin hash, para que coincida con la URL scrapead)
     
-    // Usar la imagen original del artículo para previews (sin overlays por ahora)
+    // Usar la imagen original del artículo para previews
     const imageUrl = article.image_url || 'https://picsum.photos/1200/630?random=ciudadanos';
+    console.log('Article image URL:', article.image_url, 'Final image URL:', imageUrl);
 
     const title = article.title || 'Ciudadanos Digital';
     const description = article.excerpt || article.subtitle || truncateText(stripHtml(article.content)) || article.title || '';

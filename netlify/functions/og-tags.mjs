@@ -92,7 +92,10 @@ export async function handler(event, context) {
     const shareUrl = `${siteUrl}/article/${article.id}`; // URL para compartir (sin hash, para que coincida con la URL scrapead)
     
     // Asegurar URL absoluta para la imagen con overlays
-    const imageUrl = `${siteUrl}/.netlify/functions/article-image/${article.id}`;
+    // Si el artículo no tiene imagen, usar imagen por defecto
+    const imageUrl = article.image_url 
+      ? `${siteUrl}/.netlify/functions/article-image/${article.id}`
+      : 'https://via.placeholder.com/1200x630/e5e7eb/374151?text=Ciudadanos+Digital';
 
     const title = article.title || 'Ciudadanos Digital';
     const description = article.excerpt || article.subtitle || truncateText(stripHtml(article.content)) || article.title || '';

@@ -48,20 +48,21 @@ export async function handler(event, context) {
       };
     }
 
-    // Descargar imagen base (reemplazar 'imagenes' con 'articles' si es necesario)
+    // Descargar imagen base (article.image_url ya es la URL completa de Supabase)
     let imageUrl = article.image_url;
-    if (imageUrl.includes('/imagenes/')) {
-      imageUrl = imageUrl.replace('/imagenes/', '/articles/');
+    
+    console.log('Trying image URL:', imageUrl);
+    let imageResponse = await fetch(imageUrl);
+    
+    // Si falla y la URL contiene '/imagenes/', intentar con '/articles/'
+    if (!imageResponse.ok && imageUrl.includes('/imagenes/')) {
+      const altImageUrl = imageUrl.replace('/imagenes/', '/articles/');
+      console.log('Trying alternative URL:', altImageUrl);
+      imageResponse = await fetch(altImageUrl);
+      if (imageResponse.ok) {
+        imageUrl = altImageUrl;
+      }
     }
-    if (!imageUrl) {
-      return {
-        statusCode: 400,
-        body: 'Invalid image URL'
-      };
-    }
-
-    console.log('Fetching image from:', imageUrl);
-    const imageResponse = await fetch(imageUrl);
     if (!imageResponse.ok) {
       console.error('Fetch failed:', imageResponse.status, imageResponse.statusText);
       return {
@@ -113,7 +114,7 @@ export async function handler(event, context) {
         'Content-Type': 'image/jpeg',
         'Content-Length': processedImage.length.toString(),
         'Cache-Control': 'public, max-age=3600', // Cache por 1 hora
-        'Accept-Ranges': 'none', // Evitar respuestas parciales
+
       },
       body: processedImage.toString('base64'),
       isBase64Encoded: true

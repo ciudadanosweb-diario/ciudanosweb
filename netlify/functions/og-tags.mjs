@@ -32,7 +32,9 @@ export async function handler(event, context) {
   // Detectar si es un bot de redes sociales
   const userAgent = event.headers['user-agent'] || '';
   const isBot = /facebook|twitter|linkedin|whatsapp|telegram|discord|slack/i.test(userAgent) ||
-                /bot|crawler|spider|scraper/i.test(userAgent);
+                /bot|crawler|spider|scraper|facebookexternalhit|facebot|twitterbot|linkedinbot/i.test(userAgent);
+  
+  console.log('User Agent:', userAgent, 'Is Bot:', isBot);
 
   // Obtener el ID del artículo del path (para rewrites desde _redirects)
   const pathParts = event.path.split('/');
@@ -89,11 +91,17 @@ export async function handler(event, context) {
       };
     }
 
-    const shareUrl = `${siteUrl}/article/${article.id}`; // URL para compartir (sin hash, para que coincida con la URL scrapead)
+    const shareUrl = `${siteUrl}/#/article/${article.id}`; // URL canónica con hash para SPA
     
     // Usar la imagen original del artículo para previews
-    const imageUrl = article.image_url || 'https://picsum.photos/1200/630?random=ciudadanos';
-    console.log('Article image URL:', article.image_url, 'Final image URL:', imageUrl);
+    let imageUrl = article.image_url || 'https://picsum.photos/1200/630?random=ciudadanos';
+    
+    // Asegurar que sea URL absoluta
+    if (imageUrl && !imageUrl.startsWith('http') && imageUrl !== 'https://picsum.photos/1200/630?random=ciudadanos') {
+      imageUrl = `https://wmuunmfwdqifpbbucnmz.supabase.co/storage/v1/object/public/article-images/imagenes/${imageUrl}`;
+    }
+    
+    console.log('Article ID:', article.id, 'Image URL from DB:', article.image_url, 'Final image URL:', imageUrl);
 
     const title = article.title || 'Ciudadanos Digital';
     const description = article.excerpt || article.subtitle || truncateText(stripHtml(article.content)) || article.title || '';

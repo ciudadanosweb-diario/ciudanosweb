@@ -203,7 +203,7 @@ export default function ArticleDetail() {
               )}
               <div className="ml-auto">
                 <SocialShare
-                  url={window.location.href}
+                  url={`${window.location.origin}/article/${id}`}
                   title={article.title}
                   description={article.excerpt || article.subtitle}
                   imageUrl={article.image_url ? 

@@ -94,7 +94,7 @@ export async function handler(event, context) {
       };
     }
 
-    const shareUrl = `${siteUrl}/article/${article.id}`; // URL para compartir (sin hash)
+    const shareUrl = `${siteUrl}/#/article/${article.id}`; // URL para compartir (con hash para HashRouter)
     
     // Asegurar URL absoluta para la imagen
     let imageUrl = article.image_url || '';

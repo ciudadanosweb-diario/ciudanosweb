@@ -82,7 +82,7 @@ export async function handler(event, context) {
     const description = article.excerpt || article.subtitle || truncateText(stripHtml(article.content)) || article.title || '';
     const publishedTime = article.published_at || article.created_at || new Date().toISOString();
 
-    // Generar HTML con meta tags Open Graph
+    // Generar HTML completo con meta tags dinámicos
     const html = `<!doctype html>
 <html lang="es">
   <head>

@@ -9,8 +9,11 @@ const supabase = supabaseUrl && supabaseKey
 
 export async function handler(event, context) {
   try {
-    // Obtener el ID del artículo de los parámetros
-    const articleId = event.queryStringParameters?.id;
+    console.log('Event path:', event.path);
+    // Obtener el ID del artículo del path
+    const pathParts = event.path.split('/');
+    const articleId = pathParts[2]; // /article-image/:id
+    console.log('Article ID from path:', articleId);
 
     if (!articleId) {
       return {

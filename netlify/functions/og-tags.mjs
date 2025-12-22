@@ -31,9 +31,10 @@ function escapeHtml(str) {
 export async function handler(event, context) {
   console.log('Event path:', event.path);
   console.log('Query params:', event.queryStringParameters);
-  // Obtener el ID del artículo de los parámetros
-  const articleId = event.queryStringParameters?.id;
-  console.log('Article ID:', articleId);
+  // Obtener el ID del artículo del path (para rewrites desde _redirects)
+  const pathParts = event.path.split('/');
+  const articleId = pathParts[2]; // /article/:id
+  console.log('Article ID from path:', articleId);
 
   if (!articleId) {
     return {

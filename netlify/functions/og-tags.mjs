@@ -91,11 +91,8 @@ export async function handler(event, context) {
 
     const shareUrl = `${siteUrl}/article/${article.id}`; // URL para compartir (sin hash, para que coincida con la URL scrapead)
     
-    // Asegurar URL absoluta para la imagen con overlays
-    // Si el artículo no tiene imagen, usar imagen por defecto
-    const imageUrl = article.image_url 
-      ? `${siteUrl}/.netlify/functions/article-image/${article.id}`
-      : 'https://picsum.photos/1200/630?random=ciudadanos';
+    // Usar la imagen original del artículo para previews (sin overlays por ahora)
+    const imageUrl = article.image_url || 'https://picsum.photos/1200/630?random=ciudadanos';
 
     const title = article.title || 'Ciudadanos Digital';
     const description = article.excerpt || article.subtitle || truncateText(stripHtml(article.content)) || article.title || '';

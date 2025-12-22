@@ -96,11 +96,8 @@ export async function handler(event, context) {
 
     const shareUrl = `${siteUrl}/#/article/${article.id}`; // URL para compartir (con hash para HashRouter)
     
-    // Asegurar URL absoluta para la imagen
-    let imageUrl = article.image_url || '';
-    if (imageUrl && !imageUrl.startsWith('http')) {
-      imageUrl = `${siteUrl}${imageUrl}`;
-    }
+    // Asegurar URL absoluta para la imagen con overlays
+    const imageUrl = `${siteUrl}/.netlify/functions/article-image/${article.id}`;
 
     const title = article.title || 'Ciudadanos Digital';
     const description = article.excerpt || article.subtitle || truncateText(stripHtml(article.content)) || article.title || '';

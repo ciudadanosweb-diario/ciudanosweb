@@ -211,6 +211,7 @@ export default function ArticleDetail() {
                     undefined
                   }
                 />
+                {console.log('Sharing URL:', `${window.location.origin}/article/${id}`, 'Article image:', article.image_url)}
               </div>
             </div>
 

@@ -94,14 +94,23 @@ export async function handler(event, context) {
     const shareUrl = `${siteUrl}/#/article/${article.id}`; // URL canónica con hash para SPA
     
     // Usar la imagen original del artículo para previews
-    let imageUrl = article.image_url || 'https://picsum.photos/1200/630?random=ciudadanos';
+    let imageUrl = article.image_url;
+    
+    // Si no hay imagen del artículo, usar imagen por defecto personalizable
+    if (!imageUrl) {
+      imageUrl = `${siteUrl}/default-og-image.jpg`;
+    }
     
     // Asegurar que sea URL absoluta
-    if (imageUrl && !imageUrl.startsWith('http') && imageUrl !== 'https://picsum.photos/1200/630?random=ciudadanos') {
+    if (imageUrl && !imageUrl.startsWith('http') && imageUrl !== `${siteUrl}/default-og-image.jpg`) {
       imageUrl = `https://wmuunmfwdqifpbbucnmz.supabase.co/storage/v1/object/public/article-images/imagenes/${imageUrl}`;
     }
     
     console.log('Article ID:', article.id, 'Image URL from DB:', article.image_url, 'Final image URL:', imageUrl);
+    
+    if (!article.image_url) {
+      console.log('Article has no image_url, using default image');
+    }
 
     const title = article.title || 'Ciudadanos Digital';
     const description = article.excerpt || article.subtitle || truncateText(stripHtml(article.content)) || article.title || '';

@@ -48,21 +48,30 @@ export async function handler(event, context) {
       };
     }
 
-    // Descargar imagen base
+    // Descargar imagen base (reemplazar 'imagenes' con 'articles' si es necesario)
     let imageUrl = article.image_url;
-    if (!imageUrl.startsWith('http')) {
-      imageUrl = `https://ciudadanos-web.com${imageUrl}`;
+    if (imageUrl.includes('/imagenes/')) {
+      imageUrl = imageUrl.replace('/imagenes/', '/articles/');
+    }
+    if (!imageUrl) {
+      return {
+        statusCode: 400,
+        body: 'Invalid image URL'
+      };
     }
 
+    console.log('Fetching image from:', imageUrl);
     const imageResponse = await fetch(imageUrl);
     if (!imageResponse.ok) {
+      console.error('Fetch failed:', imageResponse.status, imageResponse.statusText);
       return {
         statusCode: 500,
-        body: 'Failed to fetch image'
+        body: `Failed to fetch image: ${imageResponse.status}`
       };
     }
     
     const imageBuffer = await imageResponse.arrayBuffer();
+    console.log('Image fetched, size:', imageBuffer.byteLength);
     
     // Crear SVG con overlays (logo + categoría)
     const category = (article.category || 'NOTICIA').toUpperCase();
@@ -96,11 +105,15 @@ export async function handler(event, context) {
       .jpeg({ quality: 90 })
       .toBuffer();
 
+    console.log('Image processed successfully, size:', processedImage.length);
+
     return {
       statusCode: 200,
       headers: {
         'Content-Type': 'image/jpeg',
+        'Content-Length': processedImage.length.toString(),
         'Cache-Control': 'public, max-age=3600', // Cache por 1 hora
+        'Accept-Ranges': 'none', // Evitar respuestas parciales
       },
       body: processedImage.toString('base64'),
       isBase64Encoded: true

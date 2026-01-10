@@ -61,7 +61,7 @@ export default function Sidebar() {
                   rel="noopener noreferrer"
                   className="block w-full bg-gray-100 overflow-hidden hover:opacity-80 transition-opacity cursor-pointer group"
                 >
-                  <div className="relative w-full h-48 bg-gray-200 flex items-center justify-center">
+                  <div className="relative w-full bg-gray-200 flex items-center justify-center" style={{ height: ad.height || 192 }}>
                     <img
                       src={ad.image_url}
                       alt={ad.title || 'Publicidad'}
@@ -88,7 +88,7 @@ export default function Sidebar() {
                   </div>
                 </a>
               ) : (
-                <div className="w-full h-48 bg-gradient-to-br from-orange-400 to-orange-500 flex items-center justify-center text-white text-center p-4">
+                <div className="w-full bg-gradient-to-br from-orange-400 to-orange-500 flex items-center justify-center text-white text-center p-4" style={{ height: ad.height || 192 }}>
                   <p className="font-semibold">{ad.title || 'Publicidad'}</p>
                 </div>
               )}

@@ -12,6 +12,7 @@ type AdForm = {
   is_active: boolean;
   start_date: string;
   end_date: string;
+  height: number;
 };
 
 const getImageUrl = (url: string): string => {
@@ -36,6 +37,7 @@ export default function AdsManager() {
     is_active: true,
     start_date: '',
     end_date: '',
+    height: 0,
   });
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -226,6 +228,7 @@ export default function AdsManager() {
       end_date: formData.end_date ? new Date(formData.end_date).toISOString() : null,
       position: nextPosition,
       created_by: user.id,
+      height: formData.height || null,
     };
 
     console.log('adData to save:', adData);
@@ -267,6 +270,7 @@ export default function AdsManager() {
       is_active: ad.is_active,
       start_date: ad.start_date ? ad.start_date.split('T')[0] : '',
       end_date: ad.end_date ? ad.end_date.split('T')[0] : '',
+      height: ad.height || 0,
     });
     setShowForm(true);
   };
@@ -328,6 +332,7 @@ export default function AdsManager() {
       is_active: true,
       start_date: '',
       end_date: '',
+      height: 0,
     });
   };
 
@@ -365,6 +370,18 @@ export default function AdsManager() {
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
               rows={3}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Altura (px)</label>
+            <input
+              type="number"
+              value={formData.height}
+              onChange={(e) => setFormData({ ...formData, height: parseInt(e.target.value) || 0 })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+              placeholder="Ej: 250"
+              min="0"
             />
           </div>
 

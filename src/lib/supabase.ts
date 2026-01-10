@@ -167,4 +167,5 @@ export type Ad = {
   created_by: string;
   created_at: string;
   updated_at: string;
+  height?: number;
 };

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase, Article } from '../lib/supabase';
+import { getCategoryBySlug } from '../lib/categories';
 
 export default function FeaturedCarousel() {
   const [articles, setArticles] = useState<Article[]>([]);
@@ -52,14 +53,14 @@ export default function FeaturedCarousel() {
       <div className="absolute inset-0 flex items-end">
         <div className="container mx-auto px-4 pb-6">
           <div className="max-w-2xl">
-            {currentArticle.category && (
-              <span
-                className="inline-block px-2 py-0.5 rounded-full text-white text-xs font-semibold mb-2"
-                style={{ backgroundColor: currentArticle.category.color }}
-              >
-                {currentArticle.category.name}
-              </span>
-            )}
+            {currentArticle.category && (() => {
+              const cat = getCategoryBySlug(currentArticle.category);
+              return cat ? (
+                <span className="inline-block px-2 py-0.5 rounded-full text-white text-xs font-semibold mb-2 bg-teal-600">
+                  {cat.name}
+                </span>
+              ) : null;
+            })()}
             <h2 className="text-2xl md:text-3xl font-bold text-white mb-2 leading-tight line-clamp-2">
               {currentArticle.title}
             </h2>

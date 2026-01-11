@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { getAllCategories, LocalCategory } from '../lib/categories';
 
 type CategoryNavProps = {
@@ -7,7 +6,7 @@ type CategoryNavProps = {
 };
 
 export default function CategoryNav({ selectedCategory, onSelectCategory }: CategoryNavProps) {
-  const [categories] = useState<LocalCategory[]>(getAllCategories());
+  const categories = getAllCategories();
 
   return (
     <nav className="bg-white shadow-md border-b-4 border-orange-500">
@@ -25,10 +24,10 @@ export default function CategoryNav({ selectedCategory, onSelectCategory }: Cate
           </button>
           {categories.map((category) => (
             <button
-              key={category.id}
-              onClick={() => onSelectCategory(category.id)}
+              key={category.slug}
+              onClick={() => onSelectCategory(category.slug)}
               className={`px-4 py-2 rounded-lg whitespace-nowrap font-medium transition-colors ${
-                selectedCategory === category.id
+                selectedCategory === category.slug
                   ? 'bg-teal-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}

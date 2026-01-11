@@ -1,6 +1,7 @@
-// Categorías locales - Ahora como datos estáticos sin necesidad de Supabase
-// Última actualización: 2025-12-21
+// Categorías estáticas locales
+// Última actualización: 2026-01-11
 
+// Para compatibilidad con código existente
 export interface LocalCategory {
   name: string;
   slug: string;
@@ -24,6 +25,7 @@ export const LOCAL_CATEGORIES: LocalCategory[] = [
   { name: 'Política', slug: 'politica', description: 'Noticias políticas locales e internacionales' },
   { name: 'Religión', slug: 'religion', description: 'Religión y espiritualidad' },
   { name: 'Salud', slug: 'salud', description: 'Salud y bienestar' },
+  { name: 'Servicios', slug: 'servicios', description: 'Servicios públicos y comunitarios' },
   { name: 'Sociedad', slug: 'sociedad', description: 'Temas sociales y comunidad' },
   { name: 'Tecnología', slug: 'tecnologia', description: 'Tecnología e innovación' },
   { name: 'Transporte', slug: 'transporte', description: 'Transporte público y movilidad' },
@@ -38,21 +40,3 @@ export const getCategoryBySlug = (slug: string): LocalCategory | undefined => {
 export const getAllCategories = (): LocalCategory[] => {
   return [...LOCAL_CATEGORIES].sort((a, b) => a.name.localeCompare(b.name));
 };
-
-/**
- * SISTEMA SIMPLIFICADO DE CATEGORÍAS
- * 
- * Las categorías ahora son:
- * - Datos estáticos locales (sin consultas a BD)
- * - Almacenadas como ENUM en PostgreSQL en la columna articles.category
- * - Sin tabla separada categories
- * - Sin UUIDs, solo slugs simples
- * 
- * VENTAJAS:
- * ✅ Mucho más simple
- * ✅ Sin JOINs innecesarios
- * ✅ Sin problemas de tipos UUID/TEXT
- * ✅ Sin funciones RPC complejas
- * ✅ Carga instantánea
- * ✅ Menor uso de recursos
- */

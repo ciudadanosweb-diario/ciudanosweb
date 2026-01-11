@@ -322,7 +322,7 @@ export default function ArticleEditPage() {
     } catch (err) {
       if (timeoutId) clearTimeout(timeoutId);
       console.error('❌ performSave error', err);
-      setStatusMessage('Error al guardar: ' + (err?.message || String(err)));
+      setStatusMessage('Error al guardar: ' + ((err as any)?.message || String(err)));
       throw err;
     }
   };

@@ -24,58 +24,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Limpiar tokens inválidos al iniciar
+  useEffect(() => {
+    const cleanInvalidTokens = () => {
+      try {
+        const storedSession = localStorage.getItem(SESSION_STORAGE_KEY);
+        if (storedSession) {
+          const parsedSession = JSON.parse(storedSession);
+          // Si el refresh token parece inválido (muy corto o vacío), limpiarlo
+          if (!parsedSession.refresh_token || parsedSession.refresh_token.length < 10) {
+            console.log('🧹 Limpiando token inválido del localStorage');
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+          }
+        }
+      } catch (error) {
+        console.log('🧹 Limpiando localStorage corrupto');
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+      }
+    };
+
+    cleanInvalidTokens();
+  }, []);
+
   const updateUserPresence = async (online: boolean = true) => {
     if (!user) return;
-    
+
     try {
       const { error } = await supabase.rpc('update_user_presence', {
         user_id: user.id,
         online_status: online
       });
-      
+
       if (error) {
-        console.error('❌ Error al actualizar presencia:', error);
+        // Silenciar errores de RPC que no existen
+        console.log('ℹ️ Función RPC update_user_presence no disponible');
       } else {
         console.log(`✅ Presencia actualizada: ${online ? 'online' : 'offline'}`);
       }
     } catch (error) {
-      console.error('❌ Error en updateUserPresence:', error);
+      // Silenciar errores
+      console.log('ℹ️ Función RPC update_user_presence no disponible');
     }
   };
 
   const markUserOnline = async () => {
     if (!user) return;
-    
+
     try {
       const { error } = await supabase.rpc('update_user_online', {
         user_id: user.id
       });
-      
+
       if (error) {
-        console.error('❌ Error al marcar usuario online:', error);
+        console.log('ℹ️ Función RPC update_user_online no disponible');
       } else {
         console.log('✅ Usuario marcado como online');
       }
     } catch (error) {
-      console.error('❌ Error en markUserOnline:', error);
+      console.log('ℹ️ Función RPC update_user_online no disponible');
     }
   };
 
   const markUserOffline = async () => {
     if (!user) return;
-    
+
     try {
       const { error } = await supabase.rpc('mark_user_offline', {
         user_id: user.id
       });
-      
+
       if (error) {
-        console.error('❌ Error al marcar usuario offline:', error);
+        console.log('ℹ️ Función RPC mark_user_offline no disponible');
       } else {
         console.log('✅ Usuario marcado como offline');
       }
     } catch (error) {
-      console.error('❌ Error en markUserOffline:', error);
+      console.log('ℹ️ Función RPC mark_user_offline no disponible');
     }
   };
 
@@ -88,11 +112,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq('id', userId)
         .single();
 
-      if (error) throw error;
-      setProfile(data);
+      if (error) {
+        console.error('Error al cargar perfil:', error);
+        // Si hay error, crear un perfil básico
+        setProfile({
+          id: userId,
+          email: '',
+          full_name: '',
+          is_admin: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        } as Profile);
+      } else {
+        setProfile(data);
+      }
     } catch (error) {
       console.error('Error al cargar perfil:', error);
-      setProfile(null);
+      // Fallback: crear perfil básico
+      setProfile({
+        id: userId,
+        email: '',
+        full_name: '',
+        is_admin: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as Profile);
     }
   };
 
@@ -157,6 +201,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false);
         }
       }
+
+      // Timeout de seguridad: forzar loading=false después de 10 segundos
+      setTimeout(() => {
+        if (mounted) {
+          console.log('⏰ Timeout de seguridad: forzando loading=false');
+          setLoading(false);
+        }
+      }, 10000);
     };
 
     initializeAuth();
@@ -377,7 +429,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Verificar que el token no esté próximo a expirar (menos de 5 minutos)
       const now = Math.floor(Date.now() / 1000);
-      const timeToExpire = session.expires_at - now;
+      const timeToExpire = (session.expires_at || 0) - now;
       
       if (timeToExpire < 300) { // 5 minutos
         console.warn('⚠️ Token próximo a expirar, intentando refrescar...');

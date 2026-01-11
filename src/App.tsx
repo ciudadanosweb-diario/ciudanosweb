@@ -21,10 +21,21 @@ function App() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showLoginAdmin, setShowLoginAdmin] = useState(false);
+  const [forceLoaded, setForceLoaded] = useState(false);
 
   useEffect(() => {
     loadArticles();
   }, [selectedCategory]);
+
+  // Timeout de seguridad para forzar carga después de 15 segundos
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      console.log('⏰ Timeout de App: forzando carga completa');
+      setForceLoaded(true);
+    }, 15000);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   // Redirigir a la página principal si el usuario cierra sesión mientras está en /admin
   useEffect(() => {
@@ -49,12 +60,13 @@ function App() {
     if (data) setArticles(data);
   };
 
-  if (loading) {
+  if (loading && !forceLoaded) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Cargando...</p>
+          <p className="mt-2 text-sm text-gray-500">Si tarda demasiado, la página se cargará automáticamente en unos segundos</p>
         </div>
       </div>
     );

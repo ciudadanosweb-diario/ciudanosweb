@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TrendingUp, Calendar as CalendarIcon, Cloud } from 'lucide-react';
 import { supabase, Article, Ad } from '../lib/supabase';
+import { getCategoryBySlug } from '../lib/categories';
 
 export default function Sidebar() {
   const navigate = useNavigate();
@@ -129,14 +130,14 @@ export default function Sidebar() {
                 <h4 className="font-semibold text-gray-900 group-hover:text-teal-600 transition-colors line-clamp-2 text-sm">
                   {article.title}
                 </h4>
-                {article.category && (
-                  <span
-                    className="inline-block text-xs mt-1 px-2 py-0.5 rounded-full text-white"
-                    style={{ backgroundColor: article.category.color }}
-                  >
-                    {article.category.name}
-                  </span>
-                )}
+                {article.category && (() => {
+                  const cat = getCategoryBySlug(article.category);
+                  return cat ? (
+                    <span className="inline-block text-xs mt-1 px-2 py-0.5 rounded-full text-white bg-teal-600">
+                      {cat.name}
+                    </span>
+                  ) : null;
+                })()}
               </div>
             </div>
           ))}

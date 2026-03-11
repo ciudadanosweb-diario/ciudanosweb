@@ -92,18 +92,15 @@ export default function ArticleDetail() {
 
       setArticle(data);
 
-      // Incrementar contador de vistas de forma atómica y registrar errores.
-      // El RLS actual sólo permite que administradores modifiquen artículos,
-      // pero una política adicional (ver migración) permite aumentar
-      // `view_count` para cualquier visitante. Usamos un literal SQL para
-      // que la actualización sea atómica y no dependa del valor leído.
-      const { error: incError } = await supabase
-        .from('articles')
-        .update({ view_count: supabase.literal('view_count + 1') })
-        .eq('id', id);
+      // Incrementar contador de vistas mediante RPC para evitar usar un
+      // helper (`literal`) que no existe en la versión de supabase-js que
+      // estamos usando. El procedimiento es atómico y la política RLS
+      // permite ejecutar la función incluso como usuario anónimo.
+      const { error: incError } = await supabase.rpc('increment_view_count', {
+        article_id: id,
+      });
 
       if (incError) {
-        // No interrumpimos la carga del artículo; sólo registramos el fallo.
         console.warn('No se pudo incrementar view_count:', incError.message);
       }
 

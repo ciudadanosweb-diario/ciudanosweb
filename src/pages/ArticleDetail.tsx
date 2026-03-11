@@ -102,6 +102,12 @@ export default function ArticleDetail() {
 
       if (incError) {
         console.warn('No se pudo incrementar view_count:', incError.message);
+      } else {
+        // actualizar contador localmente para que el usuario vea la nueva cuenta
+        setArticle(prev => prev ? {
+          ...prev,
+          view_count: (prev.view_count || 0) + 1,
+        } : prev);
       }
 
       setLoading(false);

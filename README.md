@@ -265,6 +265,10 @@ ls -la dist/_redirects
   - `id`, `title`, `subtitle`, `content`, `excerpt`
   - `image_url` ⭐ - URL de la imagen principal
   - `category`, `is_featured`, `view_count`
+
+> **Nota:** se añadió una política RLS especial que permite a cualquier
+> visitante incrementar `view_count` sin necesidad de ser administrador.  La
+> actualización se realiza de forma atómica mediante una migración nueva.
   - `published_at`, `created_at`, `updated_at`
 
 - **profiles** - Perfiles de usuario

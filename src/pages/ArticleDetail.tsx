@@ -96,14 +96,20 @@ export default function ArticleDetail() {
       // helper (`literal`) que no existe en la versión de supabase-js que
       // estamos usando. El procedimiento es atómico y la política RLS
       // permite ejecutar la función incluso como usuario anónimo.
-      const { error: incError } = await supabase.rpc('increment_view_count', {
+      const { data: incData, error: incError } = await supabase.rpc('increment_view_count', {
         article_id: id,
       });
 
       if (incError) {
         console.warn('No se pudo incrementar view_count:', incError.message);
+      } else if (incData != null) {
+        // usar el valor devuelto por el servidor si está disponible
+        setArticle(prev => prev ? {
+          ...prev,
+          view_count: incData as number,
+        } : prev);
       } else {
-        // actualizar contador localmente para que el usuario vea la nueva cuenta
+        // fallback: incrementar manualmente
         setArticle(prev => prev ? {
           ...prev,
           view_count: (prev.view_count || 0) + 1,

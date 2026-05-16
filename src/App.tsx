@@ -8,6 +8,7 @@ import FeaturedCarousel from './components/FeaturedCarousel';
 import ArticleCard from './components/ArticleCard';
 import Sidebar from './components/Sidebar';
 import LoginAdmin from './components/LoginAdmin';
+import Pagination from './components/Pagination';
 
 // Lazy load heavy components
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
@@ -22,10 +23,20 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showLoginAdmin, setShowLoginAdmin] = useState(false);
   const [forceLoaded, setForceLoaded] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalArticles, setTotalArticles] = useState(0);
+  const itemsPerPage = 12; // 3 columnas × 4 filas = 12 artículos por página
 
   useEffect(() => {
-    loadArticles();
+    setCurrentPage(1); // Resetear a página 1 cuando cambia la categoría
+    loadArticles(1);
   }, [selectedCategory]);
+
+  useEffect(() => {
+    if (currentPage !== 1) {
+      loadArticles(currentPage);
+    }
+  }, [currentPage]);
 
   // Timeout de seguridad para forzar carga después de 15 segundos
   useEffect(() => {
@@ -45,19 +56,45 @@ function App() {
     }
   }, [user, loading, location.pathname, navigate]);
 
-  const loadArticles = async () => {
-    let query = supabase
-      .from('articles')
-      .select('*')
-      .not('published_at', 'is', null)
-      .order('published_at', { ascending: false });
+  const loadArticles = async (page: number) => {
+    try {
+      const offset = (page - 1) * itemsPerPage;
 
-    if (selectedCategory) {
-      query = query.eq('category', selectedCategory);
+      // Obtener el total de artículos
+      let countQuery = supabase
+        .from('articles')
+        .select('*', { count: 'exact', head: true })
+        .not('published_at', 'is', null);
+
+      if (selectedCategory) {
+        countQuery = countQuery.eq('category', selectedCategory);
+      }
+
+      const { count } = await countQuery;
+      setTotalArticles(count || 0);
+
+      // Obtener los artículos paginados
+      let query = supabase
+        .from('articles')
+        .select('*')
+        .not('published_at', 'is', null)
+        .order('published_at', { ascending: false })
+        .range(offset, offset + itemsPerPage - 1);
+
+      if (selectedCategory) {
+        query = query.eq('category', selectedCategory);
+      }
+
+      const { data } = await query;
+      if (data) {
+        setArticles(data);
+        // Scroll al top cuando cambia la página
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } catch (error) {
+      console.error('Error loading articles:', error);
+      setArticles([]);
     }
-
-    const { data } = await query;
-    if (data) setArticles(data);
   };
 
   if (loading && !forceLoaded) {
@@ -117,6 +154,16 @@ function App() {
                         <div className="text-center py-12">
                           <p className="text-gray-500 text-lg">No hay artículos disponibles</p>
                         </div>
+                      )}
+
+                      {totalArticles > itemsPerPage && (
+                        <Pagination
+                          currentPage={currentPage}
+                          totalPages={Math.ceil(totalArticles / itemsPerPage)}
+                          totalItems={totalArticles}
+                          itemsPerPage={itemsPerPage}
+                          onPageChange={setCurrentPage}
+                        />
                       )}
                     </div>
                   </div>

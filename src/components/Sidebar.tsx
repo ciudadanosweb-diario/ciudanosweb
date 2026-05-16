@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, Calendar as CalendarIcon, Cloud } from 'lucide-react';
+import { TrendingUp, Calendar as CalendarIcon, Cloud, Droplets, Wind, AlertCircle, Loader } from 'lucide-react';
 import { supabase, Article, Ad } from '../lib/supabase';
 import { getCategoryBySlug } from '../lib/categories';
+import { useWeather } from '../lib/useWeather';
 
 export default function Sidebar() {
   const navigate = useNavigate();
   const [mostRead, setMostRead] = useState<Article[]>([]);
   const [ads, setAds] = useState<Ad[]>([]);
-  const [weather] = useState({ temp: 24, condition: 'Soleado' });
+  const weather = useWeather();
   const [currentDate] = useState(new Date());
 
   useEffect(() => {
@@ -147,13 +148,45 @@ export default function Sidebar() {
       <div className="bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-lg shadow-lg p-6">
         <div className="flex items-center space-x-2 mb-4">
           <Cloud className="w-5 h-5" />
-          <h3 className="text-xl font-bold">Clima</h3>
+          <h3 className="text-xl font-bold">Clima en Vivo</h3>
+          {weather.isLoading && <Loader className="w-4 h-4 animate-spin ml-auto" />}
         </div>
-        <div className="text-center">
-          <div className="text-6xl font-bold mb-2">{weather.temp}°</div>
-          <p className="text-lg">{weather.condition}</p>
-          <p className="text-sm text-teal-100 mt-2">Santiago del Estero</p>
-        </div>
+
+        {weather.error ? (
+          <div className="flex items-start space-x-2 text-teal-100 text-sm">
+            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <span>{weather.error}</span>
+          </div>
+        ) : (
+          <>
+            <div className="text-center mb-4">
+              <div className="text-6xl font-bold mb-2">{weather.temp}°</div>
+              <p className="text-lg">{weather.condition}</p>
+              <p className="text-sm text-teal-100 mt-2">Santiago del Estero</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="bg-teal-400 bg-opacity-30 rounded-lg p-3">
+                <div className="flex items-center space-x-1 text-teal-100">
+                  <Droplets className="w-4 h-4" />
+                  <span>Humedad</span>
+                </div>
+                <div className="text-lg font-semibold mt-1">{weather.humidity}%</div>
+              </div>
+              <div className="bg-teal-400 bg-opacity-30 rounded-lg p-3">
+                <div className="flex items-center space-x-1 text-teal-100">
+                  <Wind className="w-4 h-4" />
+                  <span>Viento</span>
+                </div>
+                <div className="text-lg font-semibold mt-1">{weather.windSpeed} km/h</div>
+              </div>
+            </div>
+
+            <p className="text-xs text-teal-100 mt-4 text-center">
+              Actualizado en tiempo real • Cada 10 minutos
+            </p>
+          </>
+        )}
       </div>
 
       <div className="bg-white rounded-lg shadow-lg p-6">
